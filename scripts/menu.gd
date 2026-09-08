@@ -282,7 +282,7 @@ func show_options() -> void:
 	box.add_child(display_choice)
 	text("Frame limit",15)
 	var fps := OptionButton.new()
-	var caps := [60,90,120,0]
+	var caps := [60,90,120,144,165,240,0]
 	for cap in caps: fps.add_item("Unlimited" if cap == 0 else str(cap)+" FPS")
 	fps.select(maxi(0,caps.find(Engine.max_fps)))
 	fps.item_selected.connect(func(index): Engine.max_fps = caps[index]; store_option("fps",caps[index]))

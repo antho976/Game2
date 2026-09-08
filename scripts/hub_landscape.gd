@@ -6,6 +6,8 @@ var grass_material: ShaderMaterial
 var tree_points: Array[Vector3] = []
 var hamlet_centers: Array[Vector3] = [Vector3(35,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(12,0,-27),Vector3(-13,0,-30)]
 const POND := Vector3(-12,0,8.7)
+const GRASS_CHUNK := 8.0
+static var bark_shader: Shader
 
 func build(hub: HubKit) -> void:
 	kit = hub
@@ -48,6 +50,8 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 	var tree := kit.asset("birch_tree" if index % 4 == 0 else "oak_tree",p)
 	tree.rotation.y = rng.randf()*TAU
 	tree.scale *= size
+	# Trees sway each frame, so they keep their own imported meshes and level-of-detail data.
+	tree.set_meta(StaticBatcher.NO_BATCH,true)
 	if index % 4 == 0: birch_root_material(tree)
 	kit.trees.append(tree)
 	tree_points.append(p)
@@ -116,18 +120,31 @@ void fragment() {
 		var scale_y := rng.randf_range(.14,.48) if verge else rng.randf_range(.22,.68)
 		transforms.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3(1,scale_y,1)),p))
 		colors.append(Color(.26+rng.randf()*.13,.39+rng.randf()*.14,.13+rng.randf()*.06))
-	var batch := MultiMeshInstance3D.new()
-	batch.name = "WindMeadow"
-	batch.multimesh = MultiMesh.new()
-	batch.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	batch.multimesh.use_colors = true
-	batch.multimesh.mesh = mesh
-	batch.multimesh.instance_count = transforms.size()
-	batch.material_override = grass_material
+	# One meadow-wide batch could never be culled, so every camera, sun-split and lamp shadow
+	# pass drew all of it. Ground-grid chunks let each pass draw only the blades it can see.
+	var chunks := {}
 	for i in transforms.size():
-		batch.multimesh.set_instance_transform(i,transforms[i])
-		batch.multimesh.set_instance_color(i,colors[i])
-	add_child(batch)
+		var cell := Vector2i(floori(transforms[i].origin.x/GRASS_CHUNK),floori(transforms[i].origin.z/GRASS_CHUNK))
+		if not chunks.has(cell): chunks[cell] = []
+		chunks[cell].append(i)
+	for cell in chunks:
+		var members: Array = chunks[cell]
+		var batch := MultiMeshInstance3D.new()
+		batch.name = "WindMeadow_%d_%d" % [cell.x,cell.y]
+		batch.multimesh = MultiMesh.new()
+		batch.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		batch.multimesh.use_colors = true
+		batch.multimesh.mesh = mesh
+		batch.multimesh.instance_count = members.size()
+		batch.material_override = grass_material
+		var bounds := AABB(transforms[members[0]].origin,Vector3.ZERO)
+		for i in members.size():
+			batch.multimesh.set_instance_transform(i,transforms[members[i]])
+			batch.multimesh.set_instance_color(i,colors[members[i]])
+			bounds = bounds.expand(transforms[members[i]].origin)
+		# Blades bend in the shader, so the bounds include the tallest wind-blown tip reach.
+		batch.multimesh.custom_aabb = bounds.grow(1.2)
+		add_child(batch)
 
 func pond() -> void:
 	var rim := PackedVector3Array()
@@ -228,6 +245,8 @@ void fragment() {
 		ripple.position = spring+Vector3(.55,.107,0)
 		ripple.scale = Vector3(1,.12,.65)
 		ripple.material_override = stream_material
+		# Tweened rings must stay individual nodes.
+		ripple.set_meta(StaticBatcher.NO_BATCH,true)
 		add_child(ripple)
 		var tween := create_tween().set_loops()
 		tween.tween_property(ripple,"scale",Vector3(1.35,.12,.9),1.5).from(Vector3(.55,.12,.35)).set_delay(i*.18)
@@ -330,20 +349,28 @@ func _process(_delta: float) -> void:
 	if grass_material and is_instance_valid(kit.world.game.player):
 		grass_material.set_shader_parameter("player_position",kit.world.game.player.global_position)
 
+# Every blob is the same unit sphere; sharing it and one material per color lets the renderer
+# treat thousands of them as a few objects instead of thousands of unique meshes and materials.
+static var blob_mesh: SphereMesh
+static var blob_materials := {}
+
 static func shape(parent: Node3D, pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
+	if blob_mesh == null:
+		blob_mesh = SphereMesh.new()
+		blob_mesh.radius = 1
+		blob_mesh.height = 2
+		blob_mesh.radial_segments = 8
+		blob_mesh.rings = 3
+	if not blob_materials.has(color):
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = .87
+		blob_materials[color] = material
 	var node := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = 1
-	mesh.height = 2
-	mesh.radial_segments = 8
-	mesh.rings = 3
-	node.mesh = mesh
+	node.mesh = blob_mesh
 	node.position = pos
 	node.scale = size
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = .87
-	node.material_override = material
+	node.material_override = blob_materials[color]
 	parent.add_child(node)
 	return node
 
@@ -375,8 +402,10 @@ func birch_root_material(tree: Node3D) -> void:
 		for surface in mesh.mesh.get_surface_count():
 			var original: Material = mesh.mesh.surface_get_material(surface)
 			if not original is StandardMaterial3D or original.resource_name.to_lower() != "bark": continue
-			var shader := Shader.new()
-			shader.code = """
+			# One compiled shader serves every birch; only the per-tree parameters differ.
+			if bark_shader == null:
+				bark_shader = Shader.new()
+				bark_shader.code = """
 shader_type spatial;
 uniform vec4 bark_color : source_color;
 uniform sampler2D bark_texture : source_color;
@@ -393,7 +422,7 @@ void fragment() {
 }
 """
 			var material := ShaderMaterial.new()
-			material.shader = shader
+			material.shader = bark_shader
 			material.set_shader_parameter("bark_color",original.albedo_color)
 			material.set_shader_parameter("ground_height",tree.position.y)
 			if original.albedo_texture:

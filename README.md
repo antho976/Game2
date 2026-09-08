@@ -39,6 +39,7 @@ The traversal character is unarmed and uses the reused villager rig, extended wi
 - `docs/REUSED_ASSETS.md`: source provenance.
 - `docs/STORY.md`: story direction.
 - `docs/SYSTEMS.md`: progression requirements awaiting implementation.
+- `docs/PERFORMANCE.md`: why the hub was renderer-bound and how batching fixed it without changing the picture.
 
 ```fish
 ./play.fish --headless -- --self-test
