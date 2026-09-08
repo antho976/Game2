@@ -20,5 +20,7 @@ func run(game: Node) -> void:
 	print('HERO WALK ',game.player.current,' ',game.player.animation.current_animation_position)
 	await shot(game,'walk',game.player.position+Vector3(0,1,0),3.2,Vector3(2,1.8,4))
 	await shot(game,'hub',Vector3(13,0,-7),25,Vector3(0,19,15))
+	await shot(game,'anvil_detail',Vector3(-7.6,.65,3),2.3,Vector3(-3,2,4))
+	await shot(game,'map_detail',Vector3(9.85,1,-1.8),1.8,Vector3(1,2,3))
 	print('PLAYER VISUAL CAPTURES COMPLETE')
 	get_tree().quit()

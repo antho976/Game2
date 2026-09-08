@@ -90,7 +90,17 @@ func archive() -> void:
 	# A solid writing desk facing the visitor, with layered papers and specimen jars.
 	block(Vector3(10,.92,-1.8),Vector3(2.5,.15,1.05),timber,true)
 	for x in [8.95,11.05]:block(Vector3(x,.43,-1.8),Vector3(.16,.85,.75),timber,true)
-	for i in 3:block(Vector3(9.75+i*.025,1.015+i*.008,-1.75),Vector3(.65,.012,.43),pale).rotation.y = -.15+i*.12
+	# One sheet sits clear of the jars; overlapping thick sheets intersected at grazing angles.
+	var parchment := StandardMaterial3D.new()
+	parchment.albedo_color = Color(.66,.59,.39)
+	parchment.roughness = .96
+	block(Vector3(10.03,1.000,-1.67),Vector3(.66,.006,.44),parchment)
+	# Fine route markings make this read as a map from close up.
+	for i in 6:
+		var mark = block(Vector3(9.81+i*.074,1.004,-1.68+sin(i*.9)*.09),Vector3(.075,.001,.006),dark)
+		mark.rotation.y = -.6*cos(i*.9)
+	for p in [Vector3(9.81,1.004,-1.68),Vector3(10.18,1.004,-1.76)]:
+		block(p,Vector3(.024,.001,.024),brick)
 	block(Vector3(10.5,1.08,-1.95),Vector3(.14,.16,.14),dark)
 	beam(Vector3(10.5,1.12,-1.95),Vector3(10.58,1.43,-1.93),.018,pale)
 	for i in 3:
@@ -101,7 +111,7 @@ func archive() -> void:
 		cylinder.height = .3+i*.05
 		jar.mesh = cylinder
 		jar.material_override = world.rough_material(Color(.18+i*.04,.32,.30))
-		jar.position = Vector3(9.1+i*.28,1.18,-1.95)
+		jar.position = Vector3(8.99+i*.27,.995+cylinder.height*.5,-1.95)
 		kit.add_child(jar)
 		block(jar.position+Vector3(0,cylinder.height*.5,0),Vector3(.2,.035,.2),timber)
 	block(Vector3(12,.48,-2.2),Vector3(.7,.96,.7),world.stone[4],true)
