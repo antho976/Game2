@@ -30,7 +30,7 @@ func build(target: HubWorld) -> void:
 		for z in [-1.3,1.7]: world.block(Vector3(x,1.5,z),Vector3(.25,3,.25))
 	asset("forge",Vector3(-9.2,0,-.6),Vector3(1.6,1.3,1))
 	asset("anvil_station",Vector3(-7.4,0,3),Vector3(1.55,.95,.8))
-	var smith = npc("blacksmith",Vector3(-7.51,0,2.30))
+	var smith = npc("blacksmith",Vector3(-7.51,0,2.40))
 	smith.name = "WorkingBlacksmith"
 	smith.work_struck.connect(sparks)
 	smith.work_struck.connect(func(): world.game.play_sound("smith_hammer_anvil",smith.global_position,"smith",.1))
@@ -231,7 +231,7 @@ func _process(delta: float) -> void:
 
 func sparks() -> void:
 	var particles = GPUParticles3D.new()
-	particles.position = Vector3(-7.4,1.09,3)
+	particles.position = Vector3(-7.54,1.06,2.86)
 	particles.amount = 10
 	particles.lifetime = .3
 	particles.one_shot = true

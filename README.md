@@ -64,3 +64,5 @@ The player uses a separate `player_refined.glb`, built by `tools/player_model.py
 Options → Camera offers overhead, first-person, third-person, and far-overhead presets. Height, distance, visible area, perspective FOV, and first-person mouse sensitivity save automatically. Middle mouse rotates overhead/third-person views; the wheel zooms. First person captures the mouse, Esc releases it, and clicking the game restores capture after a focus change. Third-person camera rays pull the view forward at solid obstacles.
 
 Cat feeding now happens on open paving. Residents alternate one visible food throw with a short idle pause, instead of looping empty-handed feeding gestures.
+
+Residents share one animal-feeding reservation, with bird feeding separated from the pond. The smith finishes his approach at the authored anvil position; sparks and sound trigger at the hammer contact frame (0.8 seconds). `--work-test` checks his return route and captures that pose.

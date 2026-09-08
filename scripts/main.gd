@@ -35,7 +35,7 @@ var menus: CanvasLayer
 var village_day: Node
 
 func _ready() -> void:
-	test_mode = "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -95,6 +95,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--work-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/work_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--camera-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/camera_test.gd").new()
 		add_child(suite)

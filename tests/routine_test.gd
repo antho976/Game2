@@ -10,16 +10,21 @@ func run(game: Node) -> void:
 	game.player.position = Vector3(0,.1,12)
 	var exclusive := true
 	var conversation := false
+	var feeding_exclusive := true
 	for frame in 10800:
 		await get_tree().physics_frame
 		var occupied := {}
 		var talking := 0
+		var feeders := 0
 		for r in day.residents:
 			if r.job.is_empty() or r.job=="home": continue
+			if r.job in ["birds","cats","ducks"]: feeders += 1
 			if occupied.has(r.job): exclusive = false
 			occupied[r.job] = true
 			if r.state == "working" and r.job.begins_with("talk"): talking += 1
 		if talking==2: conversation = true
+		if feeders>1: feeding_exclusive = false
+	check(feeding_exclusive,"Only one resident reserves an animal feeding activity at a time")
 	check(conversation,"Two residents meet for a conversation")
 	check(exclusive,"Shared stations have only one assigned resident")
 	for job in ["water","garden","birds","cats","ducks","talk_a","talk_b"]:

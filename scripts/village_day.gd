@@ -6,7 +6,7 @@ var clock := 270.0
 var enabled := true
 var residents: Array[Dictionary] = []
 var reservations := {}
-var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-7.7,0,6.4),"cats":Vector3(4.4,0,3.5),"ducks":Vector3(-8.15,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
+var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-3.5,0,5.5),"cats":Vector3(4.4,0,3.5),"ducks":Vector3(-8.15,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
 var sun: DirectionalLight3D
 var environment: Environment
 var lamps: Array[OmniLight3D] = []
@@ -91,6 +91,7 @@ func _physics_process(delta: float) -> void:
 
 func release(r: Dictionary) -> void:
 	if reservations.get(r.job,-1) == r.npc.get_instance_id(): reservations.erase(r.job)
+	if reservations.get("animal_feeding",-1)==r.npc.get_instance_id(): reservations.erase("animal_feeding")
 	if r.job not in ["water", ""]: r.prop.hide()
 	r.job = ""
 
@@ -112,6 +113,14 @@ func path_to(person: HubNPC,target: Vector3) -> PackedVector3Array:
 	var result := PackedVector3Array()
 	if not life.open_cell(start) or not life.open_cell(end): return result
 	for p in life.navigation.get_point_path(start,end): result.append(Vector3(p.x,0,p.y))
+	# The grid is conservative near props. Finish at the authored interaction point
+	# only when a body sweep confirms the last short approach is unobstructed.
+	if not result.is_empty():
+		var probe := person.global_transform
+		probe.origin = result[-1]+Vector3(0,.02,0)
+		var approach: Vector3 = target-result[-1]
+		approach.y = 0
+		if not person.test_move(probe,approach): result.append(target)
 	return result
 
 func travel(r: Dictionary, job: String, target: Vector3) -> bool:
@@ -120,6 +129,7 @@ func travel(r: Dictionary, job: String, target: Vector3) -> bool:
 	release(r)
 	r.job = job
 	if job != "home": reservations[job] = r.npc.get_instance_id()
+	if job in ["birds","cats","ducks"]: reservations["animal_feeding"] = r.npc.get_instance_id()
 	r.path = path
 	r.state = "walking"
 	r.timer = 0.0
@@ -145,12 +155,12 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 			var job: String = r.plan[r.index%r.plan.size()]
 			r.index += 1
 			var key := "work_"+str(index) if job == "work" else job
-			if not reservations.has(key) and (job!="water" or (elapsed>=next_water and elapsed>=r.next_water)): travel(r,key,r.work if job=="work" else stations[job])
+			if not reservations.has(key) and (job not in ["birds","cats","ducks"] or not reservations.has("animal_feeding")) and (job!="water" or (elapsed>=next_water and elapsed>=r.next_water)): travel(r,key,r.work if job=="work" else stations[job])
 			r.due = 3+index*.4
 		person.play("idle")
 	elif r.state == "walking":
 		r.timer += delta
-		while not r.path.is_empty() and Vector2(person.position.x-r.path[0].x,person.position.z-r.path[0].z).length()<.22: r.path.remove_at(0)
+		while not r.path.is_empty() and Vector2(person.position.x-r.path[0].x,person.position.z-r.path[0].z).length()<(.035 if r.path.size()==1 and r.job=="work_0" else .16): r.path.remove_at(0)
 		if r.path.is_empty():
 			arrive(r,index)
 			return
@@ -203,7 +213,7 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		person.animation.speed_scale = 1
 		if action == "hammer":
 			var at: float = person.animation.current_animation_position
-			if person.previous_time<.4 and at>=.4: person.work_struck.emit()
+			if person.previous_time<.8 and at>=.8: person.work_struck.emit()
 			person.previous_time = at
 		if job.begins_with("talk"):
 			var other_pos: Vector3 = stations["talk_b" if job=="talk_a" else "talk_a"]
@@ -229,7 +239,8 @@ func arrive(r: Dictionary,index: int) -> void:
 	r.state = "working"
 	r.arrivals += 1
 	var target: Vector3 = r.npc.position+Vector3(0,0,1)
-	if r.job == "water": target = Vector3(0,0,.3)
+	if r.job == "work_0": target = r.npc.position+Vector3(0,0,1)
+	elif r.job == "water": target = Vector3(0,0,.3)
 	elif r.job == "garden": target = Vector3(10,0,8.3)
 	elif r.job == "ducks": target = Vector3(-12,0,8.7)
 	var facing: Vector3 = target-r.npc.position
