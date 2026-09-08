@@ -58,6 +58,8 @@ func _ready() -> void:
 	activities.game = self
 	world.add_child(activities)
 	activities.build()
+	# Every stone and wood block has been placed by now; draw them as a few batches instead.
+	world.merge_blocks()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 23

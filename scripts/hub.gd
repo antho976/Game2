@@ -14,6 +14,7 @@ const SMITH_POINT = Vector3(-6.5,0,4.0)
 const ARCHIVE_POINT = Vector3(10,0,-.5)
 const GATE_POINT = Vector3(0,0,-13)
 const WELL_POINT = Vector3(0,0,.3)
+const BATCH_CHUNK = 16.0
 
 func build(target: HubWorld) -> void:
 	world = target
@@ -47,6 +48,8 @@ func build(target: HubWorld) -> void:
 	plushie.name = "PigeonPlushie"
 	# Coping top is 1.11 m. Sit on the arrival-facing rim, clear of the rope.
 	plushie.position = Vector3(0,1.11,.87)
+	# Its stitched normal maps rely on per-part tangent space, so it keeps its own meshes.
+	plushie.set_meta(StaticBatcher.NO_BATCH,true)
 	well.add_child(plushie)
 	asset("garden_bench",Vector3(-11.1,0,5.2),Vector3(2,1.2,.7)).rotation.y = .1
 	asset("garden_bench",Vector3(7.2,0,12.2),Vector3(2,1.2,.7)).rotation.y = -.25
@@ -89,6 +92,9 @@ func build(target: HubWorld) -> void:
 	life.name = "VillageLife"
 	add_child(life)
 	life.build(self)
+	# Thousands of rigid flowers, stones, shrubs and small props become a few ground-grid
+	# batches per material. Trees, residents, animals and effects are left as they are.
+	StaticBatcher.merge(self,BATCH_CHUNK)
 
 func on_path(p: Vector2) -> bool:
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
@@ -201,8 +207,14 @@ func setup_forge() -> void:
 
 func _process(delta: float) -> void:
 	wind_time += delta
+	# Swaying re-uploads every mesh of a tree each frame. Trees too far from the view to show
+	# on screen, even through a canopy or a long shadow, wait until they can be seen again.
+	var focus: Vector3 = world.game.camera_target
+	var reach: float = world.game.camera.size*1.5+25.0
 	for i in trees.size():
-		trees[i].rotation.z = sin(wind_time*.65+i)*.006
+		var tree := trees[i]
+		if Vector2(tree.position.x-focus.x,tree.position.z-focus.z).length_squared() > reach*reach: continue
+		tree.rotation.z = sin(wind_time*.65+i)*.006
 	if forge_light:
 		forge_light.light_energy = 2.5+sin(wind_time*8)*.15
 

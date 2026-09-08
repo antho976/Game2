@@ -55,9 +55,13 @@ func build(hub: HubKit) -> void:
 		for j in 3:
 			kit.landscape.shape(self,p+Vector3(0,.4+j*.3,sin(i+j)*.2),Vector3(.22,.25,.30),Color(.22,.31,.17))
 
+static var weather_shader: Shader
+
 func weather_house(house: Node3D) -> void:
-	var shader := Shader.new()
-	shader.code = """
+	# One compiled shader serves every house; only the per-house parameters differ.
+	if weather_shader == null:
+		weather_shader = Shader.new()
+		weather_shader.code = """
 shader_type spatial;
 uniform sampler2D paint : source_color;
 uniform vec4 tint : source_color = vec4(1.0);
@@ -89,7 +93,7 @@ void fragment(){
 			var id := original.resource_name.to_lower()
 			if not id in ["plaster","stone","oak","dark_oak","slate","red_slate"]: continue
 			var material := ShaderMaterial.new()
-			material.shader = shader
+			material.shader = weather_shader
 			material.set_shader_parameter("tint",original.albedo_color)
 			material.set_shader_parameter("base_height",house.position.y)
 			material.set_shader_parameter("plaster",1.0 if id == "plaster" else 0.0)

@@ -83,8 +83,11 @@ func bird(pos: Vector3, index: int) -> void:
 		wing.position = Vector3(side*.07,.16,0)
 		model.add_child(wing)
 		Landscape.shape(wing,Vector3(side*.10,0,-.025),Vector3(.15,.027,.085),coat)
+		wing.set_meta(StaticBatcher.NO_BATCH,true)
 		wings.append(wing)
 		Landscape.shape(model,Vector3(side*.035,.025,0),Vector3(.012,.065,.013),Color(.42,.28,.14))
+	# Body, head, beak, eyes and legs move together, so they draw as one object; wings flap alone.
+	StaticBatcher.merge(model)
 	animals.append({"body":body,"model":model,"home":pos,"kind":"bird","state":"feeding",
 		"timer":rng.randf_range(1,4),"wings":wings,"phase":index*.9,"target":pos,"path":PackedVector3Array(),"flight_due":rng.randf_range(10,26),"landings":0})
 
