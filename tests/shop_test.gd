@@ -70,6 +70,10 @@ func run(game: Node) -> void:
 	game.interact()
 	check(game.input_blocked,"Shop blocks movement")
 	await shot(game,"stock")
+	GearVisuals.apply(game.smith_shop.preview,{"helmet":GearCatalog.find("warden_helmet")})
+	await shot(game,"helmet")
+	check(game.smith_shop.preview.find_children("GearMount*","BoneAttachment3D",true,false).size()==1,"Changing preview removes every previous armor attachment")
+	game.smith_shop.refresh()
 	game.smith_shop.page = "upgrade"
 	game.smith_shop.selected_uid = gear.equipped.helmet
 	game.smith_shop.refresh()
