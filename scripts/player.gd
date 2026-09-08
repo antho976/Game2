@@ -58,7 +58,7 @@ func _physics_process(delta: float) -> void:
 			collision_mask = 1
 		else: input = Vector2.ZERO
 	var direction := Vector3(input.x,0,input.y).rotated(Vector3.UP,game.yaw)
-	var speed := 5.0 if Input.is_action_pressed("run") else 3.15
+	var speed := 4.4 if Input.is_action_pressed("run") else 2.4
 	velocity.x = move_toward(velocity.x,direction.x*speed,delta*24)
 	velocity.z = move_toward(velocity.z,direction.z*speed,delta*24)
 	if activity != "sit":
@@ -72,7 +72,7 @@ func _physics_process(delta: float) -> void:
 		animation.speed_scale = 1.0
 	else:
 		play("walk" if Vector2(velocity.x,velocity.z).length()>.1 else "idle")
-		animation.speed_scale = 1.45 if Input.is_action_pressed("run") else 1.05
+		animation.speed_scale = clampf(Vector2(velocity.x,velocity.z).length()/1.5,.35,2.5) if current.ends_with("_walk") else 1.0
 	if is_on_floor(): last_safe = position
 	if position.y < -3: position = last_safe+Vector3.UP
 

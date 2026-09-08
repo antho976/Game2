@@ -14,6 +14,9 @@ var window_size := Vector2i(1440,900)
 var window_position := Vector2i.ZERO
 var display_choice: OptionButton
 var confirm: ConfirmationDialog
+var panel: PanelContainer
+var fps_label: Label
+var fps_clock := 0.0
 
 func _ready() -> void:
 	layer = 10
@@ -34,7 +37,7 @@ func build() -> void:
 	shade.color = Color(.025,.045,.037,.48)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(shade)
-	var panel := PanelContainer.new()
+	panel = PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	panel.offset_left = 48
 	panel.offset_right = 468
@@ -67,6 +70,18 @@ func build() -> void:
 		button_style.content_margin_right = 18
 		theme.set_stylebox(state,"Button",button_style)
 	root.theme = theme
+	fps_label = Label.new()
+	fps_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	fps_label.offset_left = -170
+	fps_label.offset_right = -24
+	fps_label.offset_top = 20
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_label.add_theme_font_size_override("font_size",18)
+	fps_label.add_theme_color_override("font_shadow_color",Color.BLACK)
+	fps_label.add_theme_constant_override("shadow_offset_x",2)
+	fps_label.add_theme_constant_override("shadow_offset_y",2)
+	add_child(fps_label)
+	fps_label.visible = settings.get_value("options","show_fps",false)
 	confirm = ConfirmationDialog.new()
 	confirm.title = "Start a new game?"
 	confirm.dialog_text = "This replaces your saved hub visit."
@@ -74,6 +89,11 @@ func build() -> void:
 	root.add_child(confirm)
 
 func clear(title: String, subtitle: String) -> void:
+	panel.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	panel.offset_left = 48
+	panel.offset_right = 468
+	panel.offset_top = 48
+	panel.offset_bottom = -48
 	for child in box.get_children():
 		box.remove_child(child)
 		child.queue_free()
@@ -189,6 +209,10 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST: quit_game()
 
 func _process(delta: float) -> void:
+	fps_clock += delta
+	if fps_clock > .25:
+		fps_clock = 0
+		fps_label.text = str(int(Engine.get_frames_per_second()))+" FPS"
 	if started and not active:
 		save_clock += delta
 		if save_clock > 15:
@@ -216,12 +240,12 @@ func set_fullscreen(enabled: bool) -> void:
 	if DisplayServer.get_name() == "headless": return
 	if enabled:
 		window_size = DisplayServer.window_get_size()
-		window_position = DisplayServer.window_get_position()
+		if DisplayServer.get_name() == "X11": window_position = DisplayServer.window_get_position()
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		DisplayServer.window_set_size(window_size)
-		DisplayServer.window_set_position(window_position)
+		if DisplayServer.get_name() == "X11": DisplayServer.window_set_position(window_position)
 	store_option("fullscreen",enabled)
 	if is_instance_valid(display_choice): display_choice.select(1 if enabled else 0)
 
@@ -235,6 +259,17 @@ func apply_settings() -> void:
 
 func show_options() -> void:
 	clear("Options", "Display and sound")
+	# Dedicated centered page, separate from the title / pause navigation.
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.offset_left = -330
+	panel.offset_right = 330
+	panel.offset_top = -385
+	panel.offset_bottom = 385
+	var counter := CheckButton.new()
+	counter.text = "Show FPS counter"
+	counter.button_pressed = settings.get_value("options","show_fps",false)
+	counter.toggled.connect(func(value): fps_label.visible = value; store_option("show_fps",value))
+	box.add_child(counter)
 	text("Display mode  ·  F11 to toggle",15)
 	display_choice = OptionButton.new()
 	display_choice.add_item("Windowed")

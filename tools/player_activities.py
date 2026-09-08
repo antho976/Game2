@@ -10,6 +10,38 @@ rig=next(ob for ob in objects if ob.type=='ARMATURE')
 for ob in objects:
     ob.hide_set(False);ob.hide_viewport=False
     if ob.parent is None:ob.location-=Vector(col['export_origin'])
+# A contact/swing walk cycle, authored on the source skeleton at 30 fps.
+old=bpy.data.actions.get('villager_walk')
+if old:bpy.data.actions.remove(old)
+action=bpy.data.actions.new('villager_walk');action.use_fake_user=True
+rig.animation_data.action=action
+for frame in range(1,26):
+    t=(frame-1)/24
+    for bone in rig.pose.bones:
+        bone.rotation_mode='XYZ';bone.rotation_euler=(0,0,0);bone.location=(0,0,0)
+    rig.pose.bones['Hips'].location.y=-.045+.012*math.cos(t*math.tau*2)
+    rig.pose.bones['Hips'].rotation_euler.z=.025*math.sin(t*math.tau)
+    rig.pose.bones['Chest'].rotation_euler.z=-.035*math.sin(t*math.tau)
+    for side,offset in [('L',0),('R',.5)]:
+        phase=(t+offset)%1
+        if phase<.6:
+            y=-.30+phase/.6*.60;lift=0
+        else:
+            u=(phase-.6)/.4
+            y=.30-.60*(u*u*(3-2*u));lift=.105*math.sin(u*math.pi)
+        down=.70-lift
+        distance=min(.755,math.hypot(y,down))
+        knee=2*math.acos(distance/.76)
+        thigh=math.atan2(y,down)-knee*.5
+        rig.pose.bones['Thigh.'+side].rotation_euler.x=thigh
+        rig.pose.bones['Shin.'+side].rotation_euler.x=knee
+        rig.pose.bones['Foot.'+side].rotation_euler.x=-thigh-knee
+        rig.pose.bones['UpperArm.'+side].rotation_euler.x=.28*math.cos((t+offset)*math.tau)
+        rig.pose.bones['Forearm.'+side].rotation_euler.x=-.15-.08*max(0,math.cos((t+offset)*math.tau))
+    for bone in rig.pose.bones:
+        bone.keyframe_insert(data_path='rotation_euler',frame=frame,group=bone.name)
+        bone.keyframe_insert(data_path='location',frame=frame,group=bone.name)
+action.frame_range=(1,25)
 for clip in ['pet','water','feed','sit']:
     action=bpy.data.actions.new('villager_'+clip);action.use_fake_user=True
     rig.animation_data.action=action

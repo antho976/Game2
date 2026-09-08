@@ -14,7 +14,7 @@ def mat(name,color,rough=.8,metal=0):
     return m
 M={name:mat(name,col) for name,col in {
     'tabby':(.51,.27,.105),'cream':(.81,.72,.51),'stripe':(.23,.115,.045),'nose':(.32,.16,.13),
-    'eye':(.035,.045,.024),'iris':(.46,.57,.17),'wood':(.28,.155,.067),'wood_light':(.43,.28,.13),
+    'eye':(.035,.045,.024),'iris':(.46,.57,.17),'wood':(.28,.155,.067),'wood_light':(.25,.20,.14),
     'iron':(.14,.16,.16),'duck_brown':(.36,.25,.15),'duck_cream':(.71,.68,.51),'duck_head':(.07,.24,.17),
     'orange':(.64,.35,.08),'blue':(.12,.23,.35),'soil':(.14,.095,.05),'leaf':(.18,.34,.10),'leaf_light':(.35,.46,.15),
     'carrot':(.66,.25,.065),'stone':(.39,.40,.34),'brass':(.55,.36,.105),'linen':(.66,.56,.37)
@@ -57,7 +57,8 @@ def export(name):
     bpy.ops.export_scene.gltf(filepath=str(OUT/(name+'.glb')),export_format='GLB',use_selection=True,export_animations=False)
     # Separate source collections remain editable; translated only in the library.
     offset=len(bpy.data.collections)*4
-    for ob in current:ob.location.x+=offset
+    for ob in current:
+        if ob.parent is None: ob.location.x+=offset
     col['export_origin']=[offset,0,0]
     current.clear()
 
@@ -80,6 +81,19 @@ for i,(x,y) in enumerate([(-.11,-.2),(.11,-.2),(-.11,.22),(.11,.22)]):
 for y in [-.08,.05,.18]:
     curve('BackStripe',[(-.16,y,.37),(-.12,y,.48),(0,y,.523),(.12,y,.48),(.16,y,.37)],.019,'stripe')
 curve('CatTail',[(0,.27,.40),(.07,.44,.56),(.1,.50,.8),(.04,.46,.9)],.042,'tabby')
+# Put each limb's pivot at its shoulder/hip and carry its paw with it.
+for i,(x,y) in enumerate([(-.11,-.2),(.11,-.2),(-.11,.22),(.11,.22)]):
+    leg=bpy.data.objects['Leg'+str(i)]; paw=bpy.data.objects['Paw'+str(i)]
+    pivot=Vector((x,y,.29)); shift=leg.location-pivot
+    for vertex in leg.data.vertices: vertex.co+=shift
+    leg.location=pivot
+    world=paw.matrix_world.copy();paw.parent=leg;paw.matrix_world=world
+# Curves used to rotate around the world origin, making the entire tail orbit.
+tail=bpy.data.objects['CatTail'];pivot=Vector((0,.27,.4))
+for spline in tail.data.splines:
+    for point in spline.bezier_points:
+        point.co-=pivot;point.handle_left-=pivot;point.handle_right-=pivot
+tail.location=pivot
 export('tabby_cat')
 
 # Mallard, with individual wings for a greeting flap.
@@ -99,7 +113,10 @@ ell('Tail',(0,.30,.24),(.11,.16,.048),'duck_brown')
 export('mallard')
 
 # Small dock and a low feeding post, with irregular planks and rope.
-for i in range(9):box('DockPlank',((i-4)*.25,0,.20),(.235,1.85,.11),'wood_light')
+for i in range(9):
+    plank=box('DockPlank',((i-4)*.25,0,.20),(.225,1.82+(i%3)*.018,.11),'wood_light')
+    plank.rotation_euler.z=math.sin(i*2.1)*.008
+    for y in [-.70,.70]:ell('DockNail',((i-4)*.25,y,.258),(.015,.015,.004),'iron')
 for x in [-.91,.91]:
     box('UnderBeam',(x,0,.09),(.13,2,.15),'wood')
     for y in [-.8,.8]:rod('DockPost',(x,y,-.35),(x,y,.66),.085,'wood')

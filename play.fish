@@ -13,4 +13,9 @@ if not test -x "$godot_executable"
 end
 "$godot_executable" --headless --editor --path "$project_dir" --import --quiet
 or exit $status
-exec "$godot_executable" --path "$project_dir" $argv
+# Use the native compositor on Wayland, avoiding the XWayland event path.
+set display_args
+if test -n "$WAYLAND_DISPLAY"; and not contains -- --headless $argv; and not contains -- --display-driver $argv
+    set display_args --display-driver wayland
+end
+exec "$godot_executable" --path "$project_dir" $display_args $argv

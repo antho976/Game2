@@ -63,7 +63,7 @@ func cat(pos: Vector3, friendly: bool, coat: Color) -> void:
 					mat.albedo_color = coat
 					mesh.set_surface_override_material(surface,mat)
 	animals.append({"body":body,"model":model,"home":pos,"kind":"cat","friendly":friendly,
-		"pet_until":0.0,"pets":0,"state":"idle","timer":0.0,"legs":legs,"tail":tail,"phase":float(animals.size())*1.7,"target":pos,"path":PackedVector3Array(),"decision":0.0,"stalled":0.0,"interest":0.0,"attention_cooldown":rng.randf_range(1,5),"wander_due":rng.randf_range(3,8),"avoid_for":0.0,"avoid_direction":Vector3.ZERO})
+		"gait":0.0,"pet_until":0.0,"pets":0,"state":"idle","timer":0.0,"legs":legs,"tail":tail,"phase":float(animals.size())*1.7,"target":pos,"path":PackedVector3Array(),"decision":0.0,"stalled":0.0,"interest":0.0,"attention_cooldown":rng.randf_range(1,5),"wander_due":rng.randf_range(3,8),"avoid_for":0.0,"avoid_direction":Vector3.ZERO})
 
 func bird(pos: Vector3, index: int) -> void:
 	var body := body_at(pos,.065)
@@ -262,8 +262,9 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 			a.state = "petted"
 			a.body.velocity = Vector3(0,-2,0)
 			a.body.move_and_slide()
-			a.model.rotation.z = sin(elapsed*4)*.08
-			a.tail.rotation.z = sin(elapsed*5)*.3
+			a.model.rotation.z = sin(elapsed*2)*.025
+			for leg in a.legs: leg.rotation.x = lerp_angle(leg.rotation.x,0,delta*8)
+			a.tail.rotation.z = sin(elapsed*2)*.14
 			return
 		a.model.rotation.z = lerpf(a.model.rotation.z,0,delta*5)
 		a.decision = maxf(0,a.decision-delta)
@@ -315,7 +316,7 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 			a.path.clear()
 		direction = steer_clear(a,direction,delta)
 		var before := body.position
-		body.velocity = direction*speed+Vector3(0,-3,0)
+		body.velocity = body.velocity.move_toward(direction*speed+Vector3(0,-3,0),delta*5)
 		body.move_and_slide()
 		var moved := Vector2(body.position.x-before.x,body.position.z-before.z).length()
 		if speed > 0 and not direction.is_zero_approx() and moved < .15*speed*delta:
@@ -325,8 +326,10 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 				a.decision = 1.2
 		else:
 			a.stalled = 0.0
+		a.gait += moved*TAU/.66
 		for i in a.legs.size():
-			a.legs[i].rotation.x = sin(elapsed*12+a.phase+(i%2)*PI)*.45 if moved > .002 else 0.0
+			var angle: float = sin(a.gait+[0.0,PI,PI*1.5,PI*.5][i])*.38 if moved > .001 else 0.0
+			a.legs[i].rotation.x = lerp_angle(a.legs[i].rotation.x,angle,minf(delta*18,1))
 		a.tail.rotation.z = sin(elapsed*2+a.phase)*.25
 		a.model.position.y = sin(elapsed*3+a.phase)*.008
 	else:

@@ -23,7 +23,7 @@ func asset(id: String,pos: Vector3) -> Node3D:
 
 func build() -> void:
 	rng.seed = 829
-	asset("pond_dock",Vector3(-8.6,-.20,8.2)).rotation.y = PI/2
+	points.append({"id":"pond_sit","pos":Vector3(-11.1,0,4.25),"radius":1.7,"text":"Sit by the pond"})
 	points.append({"id":"feed","pos":Vector3(-8.15,0,8.25),"radius":2.0,"text":"Scatter feed for the ducks"})
 	for i in 4:
 		var duck := asset("mallard",POND+Vector3(cos(i*1.7)*1.65,.085,sin(i*1.7)*1.15))
@@ -167,6 +167,10 @@ func interact(id: String) -> void:
 			game.player.act("water",Vector3(10,0,8.3),3)
 			game.toast("A little care for tomorrow's supper.")
 			water_particles()
+		"pond_sit":
+			game.player.act("sit",Vector3(-12.0,0,8.7),0)
+			game.player.position = Vector3(-11.1,.02,5.2)
+			game.toast("A moment beside the water.")
 		"sit":
 			game.player.act("sit",Vector3(7.2,0,15),0)
 			game.player.position = Vector3(7.2,.02,12.15)

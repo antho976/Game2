@@ -20,6 +20,13 @@ func run(game: Node) -> void:
 		check(found,"Authored skeletal animation: "+action)
 	check(game.kit.life.navigation_ready,"Animal navigation built from live collision")
 	var start: Vector3 = game.player.position
+	game.player.position = Vector3(-13.7,.1,6.0)
+	Input.action_press("up")
+	await frames(270)
+	Input.action_release("up")
+	check(game.player.position.z < -3.8,"Pond bench leaves the western house lane open")
+	game.player.position = start
+	game.player.velocity = Vector3.ZERO
 	Input.action_press("right")
 	await frames(40)
 	Input.action_release("right")
@@ -36,6 +43,9 @@ func run(game: Node) -> void:
 		if animal.kind == "cat" and animal.friendly:
 			cat = animal
 			break
+	for i in 4:
+		var paws = cat.model.find_children("Paw"+str(i),"Node3D",true,false)
+		check(not paws.is_empty() and paws[0].get_parent().name == "Leg"+str(i),"Cat paw follows limb pivot "+str(i))
 	var cat_start: Vector3 = cat.body.position
 	game.player.position = cat.body.position+Vector3(0,0,1.15)
 	await frames(4)

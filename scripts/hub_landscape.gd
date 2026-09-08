@@ -4,6 +4,7 @@ var kit: HubKit
 var rng := RandomNumberGenerator.new()
 var grass_material: ShaderMaterial
 var tree_points: Array[Vector3] = []
+var hamlet_centers: Array[Vector3] = [Vector3(25,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(12,0,-27),Vector3(-13,0,-30)]
 const POND := Vector3(-12,0,8.7)
 
 func build(hub: HubKit) -> void:
@@ -11,6 +12,7 @@ func build(hub: HubKit) -> void:
 	rng.seed = 74129
 	lighting()
 	build_outskirts()
+	build_hamlet()
 	var planting := [Vector3(-16,0,-12),Vector3(-10,0,-13.8),Vector3(-17,0,-3),
 		Vector3(-16.8,0,2.7),Vector3(-16.8,0,5.7),Vector3(-10.2,0,14.6),
 		Vector3(-4.3,0,13.8),Vector3(13.4,0,14.0),Vector3(16.2,0,12.2),
@@ -24,7 +26,7 @@ func build(hub: HubKit) -> void:
 		var radius := rng.randf_range(22,55)
 		var p := Vector3(cos(angle)*radius,0,sin(angle)*radius*.84)
 		if (absf(p.x) < 21 and absf(p.z) < 18) or outside_water(p) or (absf(p.x) < 4 and p.z < 0): continue
-		plant_tree(p,rng.randf_range(.65,1.65),i)
+		if plantable(p): plant_tree(p,rng.randf_range(.65,1.65),i)
 	for i in 16:
 		conifer(Vector3(-34+i*4.5+rng.randf_range(-1,1),0,-23-rng.randf_range(0,13)),rng.randf_range(.8,1.5))
 	pond()
@@ -39,7 +41,7 @@ func build(hub: HubKit) -> void:
 		else:
 			flowers(p,i)
 	for p in [Vector3(-17,0,4),Vector3(-7,0,11),Vector3(15,0,9),Vector3(16,0,-5),Vector3(8,0,-14)]:
-		kit.asset("herb_patch",p).rotation.y = rng.randf()*TAU
+		flowers(p,int(absf(p.x)))
 
 func plant_tree(p: Vector3, size: float, index: int) -> void:
 	p.y = terrain_height(p)
@@ -54,6 +56,9 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 
 func plantable(p: Vector3) -> bool:
 	if outside_water(p): return false
+	if absf(p.x+9.1)<1.8 and absf(p.z-8.2)<1.2: return false
+	for center in hamlet_centers:
+		if absf(p.x-center.x)<3.4 and absf(p.z-center.z)<3.6: return false
 	if absf(p.x) < 2.2 and p.z < -16: return false
 	if kit.on_path(Vector2(p.x,p.z)): return false
 	if Vector2(p.x-POND.x,(p.z-POND.z)*1.25).length() < 3.3: return false
@@ -99,11 +104,16 @@ void fragment() {
 		var p := Vector3(rng.randf_range(-43,43),.015,rng.randf_range(-35,35))
 		if i > 34000: p = Vector3(rng.randf_range(-18.5,18.5),.015,rng.randf_range(-15,14.5))
 		if not plantable(p): continue
+		# Keep a trimmed verge beside paving instead of rectangular walls of tall grass.
+		var verge := false
+		for offset in [Vector2(.4,0),Vector2(-.4,0),Vector2(0,.4),Vector2(0,-.4)]:
+			if kit.on_path(Vector2(p.x,p.z)+offset): verge = true
+		if verge and rng.randf() < .8: continue
 		p.y += terrain_height(p)
 		# Irregular density gives patches and breathing room instead of a lawn grid.
 		var density := sin(p.x*.63+cos(p.z*.31))*sin(p.z*.57)
 		if density < -.4 and rng.randf() > .18: continue
-		var scale_y := rng.randf_range(.22,.8)
+		var scale_y := rng.randf_range(.14,.48) if verge else rng.randf_range(.22,.68)
 		transforms.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3(1,scale_y,1)),p))
 		colors.append(Color(.26+rng.randf()*.13,.39+rng.randf()*.14,.13+rng.randf()*.06))
 	var batch := MultiMeshInstance3D.new()
@@ -517,3 +527,20 @@ void fragment() {
 		p.y = terrain_height(p)
 		kit.world.box(p+Vector3(0,.5,0),Vector3(.13,1,.13),kit.world.wood)
 		if i < 9: kit.world.box(p+Vector3(.45,.66,.10),Vector3(1,.09,.10),kit.world.wood)
+
+func build_hamlet() -> void:
+	for i in hamlet_centers.size():
+		var p := hamlet_centers[i]
+		p.y = terrain_height(p)
+		var house := kit.asset("cottage" if i%2 == 0 else "townhouse",p)
+		house.rotation.y = [-.3,.2,.5,-.12,.18][i]
+		kit.world.box(p+Vector3(0,-.25,0),Vector3(5.5,.55,4.8),kit.world.stone[2])
+		for j in 8:
+			var path := p+Vector3(sin(j*.3)*.4,0,2.4+j*.65)
+			path.y = terrain_height(path)+.04
+			kit.world.box(path,Vector3(1.35,.09,.59),kit.world.stone[(j+i)%6])
+		for j in 6:
+			var fence := p+Vector3(-3.5+j*1.25,0,7.8)
+			fence.y = terrain_height(fence)
+			kit.world.box(fence+Vector3(0,.55,0),Vector3(.12,1.1,.12),kit.world.wood)
+			if j<5: kit.world.box(fence+Vector3(.6,.7,0),Vector3(1.3,.1,.1),kit.world.wood)

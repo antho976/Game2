@@ -23,7 +23,7 @@ var muted := false
 var menus: CanvasLayer
 
 func _ready() -> void:
-	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args()
+	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -77,6 +77,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--polish-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/polish_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--menu-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/menu_test.gd").new()
 		add_child(suite)
@@ -208,10 +212,10 @@ func update_interaction() -> void:
 	if nearest.is_empty():
 		for service in world.interactions:
 			if player.position.distance_to(service.pos) < 2.8: text = service.text
-	prompt.text = text if player.activity_time <= 0 else ""
+	prompt.text = "Move to stand up" if player.activity == "sit" else (text if player.activity_time <= 0 else "")
 
 func interact() -> void:
-	if player.activity_time > 0: return
+	if player.activity_time > 0 or player.activity == "sit": return
 	if nearest.begins_with("cat:"):
 		for animal in kit.life.animals:
 			if str(animal.body.get_instance_id()) == nearest.get_slice(":",1):
