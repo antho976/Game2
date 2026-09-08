@@ -6,7 +6,7 @@
 2. Build the character, without weapons.
 3. Decide subsequent work with the author after those stages have been reviewed.
 
-The author is currently developing why hub elements belong there and how progression should work. Do not invent or implement those systems before that direction is supplied.
+The current pass builds the hub with an unarmed traversal character. Blacksmith and researcher locations are included, but purchases and research systems are deferred. See SYSTEMS.md for the captured future direction.
 
 ## Visual direction
 
@@ -28,4 +28,4 @@ The author wants to explore the best result achievable with AI over two days, wi
 
 ## Current state
 
-Planning only. No original-game assets have been committed. No hub redesign, character implementation, or progression changes have started in this repository.
+The hub now reuses selected crawler scenery and adds original Blender props, animals, and skeletal interaction animations. The asymmetric village includes a pond, ducks, cats, reactive birds, garden watering, a bench, and a bell. More detailed NPC schedules and all progression systems remain deferred.

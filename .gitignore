@@ -18,3 +18,10 @@ __pycache__/
 
 # Local agent/session state
 .relay/
+
+# Textures extracted by Godot from embedded GLBs
+assets/hub/*.png
+assets/hub/*.png.import
+assets/village/hub_player_*.png
+assets/village/hub_player_*.png.import
+captures/
