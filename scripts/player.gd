@@ -116,3 +116,7 @@ func act(id: String, target: Vector3, seconds: float) -> void:
 	facing = atan2(direction.x,direction.z)
 	velocity.x = 0
 	velocity.z = 0
+
+# Research stat bonuses are ready for the forthcoming combat system.
+func combat_stats() -> Dictionary:
+	return game.research.player_stats()

@@ -38,7 +38,15 @@ func run(game: Node) -> void:
 	check(gear.stats(gear.owned(first)).damage>before and gear.owned(duplicate).upgrade==0,"Upgrade changes only its own copy")
 	unchanged = gear.gold
 	check(not gear.upgrade(first,0).error.is_empty() and gear.gold==unchanged,"Stale upgrade confirmation cannot spend gold")
-	for rank in range(1,5):gear.upgrade(first,rank)
+	for rank in range(1,5):
+		# Higher upgrades retain risk even with large survival bonuses.
+		var success_probe := RandomNumberGenerator.new()
+		for seed_value in 1000:
+			success_probe.seed=seed_value
+			if success_probe.randf()<gear.survival(gear.owned(first)):
+				gear.rng.seed=seed_value
+				break
+		gear.upgrade(first,rank)
 	check(not gear.upgrade(first,5).error.is_empty(),"Upgrade cap is enforced")
 	gear.survival_bonus = 0
 	gear.equip(duplicate)

@@ -15,6 +15,7 @@ var filter_slot := "all"
 var confirm: ConfirmationDialog
 var pending_uid := 0
 var pending_rank := 0
+var pending_quote: Dictionary = {}
 func label_in(parent: Node,text: String,size := 18,color := Color(.86,.85,.78)) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -133,6 +134,9 @@ func _ready() -> void:
 	confirm.ok_button_text = "Attempt upgrade"
 	confirm.confirmed.connect(attempt_upgrade)
 	root.add_child(confirm)
+	game.research.changed.connect(func():
+		if active: refresh()
+	)
 	root.hide()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 func clear(parent: Node) -> void:
@@ -181,7 +185,7 @@ func refresh() -> void:
 		if filter_slot!="all" and def.slot!=filter_slot: continue
 		visible_entries.append(entry)
 		var caption: String = def.name
-		if page=="stock": caption+="\n%d gold · Level %d"%[def.price,def.level]
+		if page=="stock": caption+="\n%d gold · Level %d"%[game.equipment.purchase_price(def.id),def.level]
 		else:
 			caption+=" +%d  ·  #%d"%[entry.upgrade,entry.uid]
 			if game.equipment.equipped.get(def.slot,0)==entry.uid: caption+="  [equipped]"
@@ -199,7 +203,7 @@ func refresh() -> void:
 	selected_uid = 0 if page=="stock" else int(selected.uid)
 	var def := GearCatalog.find(selected_id)
 	var rank: int = selected.get("upgrade",0)
-	var stats: Dictionary = game.equipment.stats({"id":selected_id,"upgrade":rank})
+	var stats: Dictionary = game.equipment.stats(selected)
 	label_in(detail,def.name+(" +%d"%rank if rank>0 else ""),26,Color(.91,.80,.58))
 	label_in(detail,def.slot.capitalize()+" · Requires level %d"%def.level,15)
 	label_in(detail,def.description,16)
@@ -223,7 +227,7 @@ func refresh() -> void:
 				status.text = "Previewing the complete set. No equipment was purchased or equipped."
 			)
 		var reason: String = game.equipment.buy_error(selected_id)
-		button_in(detail,"Buy · %d gold"%def.price,func():
+		button_in(detail,"Buy · %d gold"%game.equipment.purchase_price(def.id),func():
 			var error: String = game.equipment.buy(selected_id)
 			message(error if not error.is_empty() else "Purchased "+def.name+". Find it in Your equipment.")
 		,not reason.is_empty())
@@ -235,12 +239,12 @@ func refresh() -> void:
 			message(error if not error.is_empty() else ("Unequipped " if worn else "Equipped ")+def.name)
 		)
 	else:
-		if rank>=GearCatalog.MAX_UPGRADE: label_in(detail,"Maximum upgrade · +5",22)
+		if rank>=game.equipment.max_upgrade(): label_in(detail,"Current upgrade limit · +%d"%game.equipment.max_upgrade(),22)
 		else:
 			var chance: float = game.equipment.survival(selected)
 			label_in(detail,"+%d → +%d"%[rank,rank+1],24)
 			label_in(detail,"%.0f%% survives and improves\n%.0f%% permanently destroyed"%[chance*100,(1-chance)*100],18,Color(.94,.66,.43))
-			var next: Dictionary = game.equipment.stats({"id":selected_id,"upgrade":rank+1})
+			var next: Dictionary = game.equipment.next_stats(selected)
 			var key := "damage" if def.slot=="weapon" else "protection"
 			label_in(detail,"%s: %s → %s"%[key.capitalize(),stats[key],next[key]])
 			label_in(detail,"Failure consumes the gold and this exact item, including equipped gear. Other copies are safe.",16)
@@ -252,8 +256,9 @@ func request_upgrade() -> void:
 	if item.is_empty(): return
 	pending_uid = selected_uid
 	pending_rank = item.upgrade
+	pending_quote = game.equipment.upgrade_quote(item)
 	confirm.dialog_text = "%s +%d → +%d\nCost: %d gold\nSurvival: %.0f%%\n\nFailure permanently destroys copy #%d. Gold is spent either way."%[GearCatalog.find(item.id).name,item.upgrade,item.upgrade+1,game.equipment.upgrade_cost(item),game.equipment.survival(item)*100,item.uid]
 	confirm.popup_centered(Vector2i(500,270))
 func attempt_upgrade() -> void:
-	var result: Dictionary = game.equipment.upgrade(pending_uid,pending_rank)
+	var result: Dictionary = game.equipment.upgrade(pending_uid,pending_rank,pending_quote)
 	message(result.error if not result.error.is_empty() else ("Upgrade succeeded. The item is stronger." if result.survived else "Upgrade failed. That item was permanently destroyed."))
