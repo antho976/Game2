@@ -12,6 +12,8 @@ var environment: Environment
 var lamps: Array[OmniLight3D] = []
 var clock_label: Label
 var completed := {}
+var elapsed := 0.0
+var next_water := 0.0
 
 func build() -> void:
 	enabled = not game.test_mode or "--routine-test" in OS.get_cmdline_user_args()
@@ -22,12 +24,15 @@ func build() -> void:
 		if child is OmniLight3D and child != game.kit.forge_light: lamps.append(child)
 	clock_label = game.label("",14,Color(.87,.85,.74),Vector2(30,74))
 	var doors := [Vector3(-7.15,0,-7.4),Vector3(3.95,0,-9.5),Vector3(12.85,0,-8.8),Vector3(-13.75,0,-4.0)]
-	var plans := [["work","water","work","talk_a"],["work","birds","work","talk_b"],["garden","water","garden","ducks"],["water","cats","talk_a","birds"],["talk_b","ducks","water","cats"],["birds","talk_b","cats","water"]]
+	var plans := [["work","talk_a","work","work"],["work","talk_b","work","work"],["garden","water","garden","ducks"],["water","cats","talk_a","birds"],["talk_b","ducks","water","cats"],["birds","talk_b","cats","water"]]
 	for i in game.kit.npcs.size():
 		var person: HubNPC = game.kit.npcs[i]
 		person.routine_managed = enabled
+		if enabled:
+			person.model.rotation.y += person.rotation.y
+			person.rotation.y = 0.0
 		var prop := make_bucket(person)
-		residents.append({"npc":person,"work":person.position,"door":doors[i%4],"plan":plans[i%plans.size()],"index":i%4,"job":"","state":"waiting","path":PackedVector3Array(),"due":float(i)*4+1,"timer":0.0,"stuck":0.0,"night":20.0+i*.28,"morning":6.1+i*.25,"prop":prop,"arrivals":0})
+		residents.append({"npc":person,"work":person.position,"door":doors[i%4],"plan":plans[i%plans.size()],"index":i%4,"job":"","state":"waiting","path":PackedVector3Array(),"due":float(i)*4+1,"timer":0.0,"stuck":0.0,"night":20.0+i*.28,"morning":6.1+i*.25,"prop":prop,"arrivals":0,"next_water":0.0})
 	update_light()
 
 func make_bucket(person: HubNPC) -> Node3D:
@@ -62,7 +67,9 @@ func hour() -> float:
 	return fposmod(clock,DAY_SECONDS)/30.0
 
 func _process(delta: float) -> void:
-	if enabled: clock = fposmod(clock+delta,DAY_SECONDS)
+	if enabled:
+		clock = fposmod(clock+delta,DAY_SECONDS)
+		elapsed += delta
 	update_light()
 
 func update_light() -> void:
@@ -84,12 +91,23 @@ func _physics_process(delta: float) -> void:
 
 func release(r: Dictionary) -> void:
 	if reservations.get(r.job,-1) == r.npc.get_instance_id(): reservations.erase(r.job)
-	if r.job != "water": r.prop.hide()
+	if r.job not in ["water", ""]: r.prop.hide()
 	r.job = ""
 
 func path_to(person: HubNPC,target: Vector3) -> PackedVector3Array:
 	var life = game.kit.life
-	var start: Vector2i = life.nearest_cell(person.position)
+	var start := Vector2i(-1,-1)
+	var closest := INF
+	var origin: Vector2i = life.cell_at(person.position)
+	for x in range(-3,4):
+		for z in range(-3,4):
+			var candidate := origin+Vector2i(x,z)
+			if not life.open_cell(candidate): continue
+			var point: Vector2 = life.navigation.get_point_position(candidate)
+			var offset := Vector3(point.x-person.position.x,0,point.y-person.position.z)
+			if offset.length_squared()<closest and not person.test_move(person.global_transform,offset):
+				start = candidate
+				closest = offset.length_squared()
 	var end: Vector2i = life.nearest_cell(target)
 	var result := PackedVector3Array()
 	if not life.open_cell(start) or not life.open_cell(end): return result
@@ -127,7 +145,7 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 			var job: String = r.plan[r.index%r.plan.size()]
 			r.index += 1
 			var key := "work_"+str(index) if job == "work" else job
-			if not reservations.has(key): travel(r,key,r.work if job=="work" else stations[job])
+			if not reservations.has(key) and (job!="water" or (elapsed>=next_water and elapsed>=r.next_water)): travel(r,key,r.work if job=="work" else stations[job])
 			r.due = 3+index*.4
 		person.play("idle")
 	elif r.state == "walking":
@@ -139,21 +157,26 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		var direction: Vector3 = (r.path[0]-person.position)
 		direction.y = 0
 		direction = direction.normalized()
-		# Give passing residents and the player room without abandoning the route.
-		var avoidance := Vector3.ZERO
+		# Choose one passing side consistently, instead of alternating repulsion at each grid corner.
 		for other in residents:
 			if other == r or other.state == "inside": continue
-			var offset: Vector3 = person.position-other.npc.position
-			offset.y = 0
-			if offset.length()<.85: avoidance += offset.normalized()*(.85-offset.length())*1.8
-		direction = (direction+avoidance).normalized()
-		person.velocity = direction*(1.15+index*.025)+Vector3(0,-3,0)
+			var toward: Vector3 = other.npc.position-person.position
+			toward.y = 0
+			if toward.length()<.85 and toward.normalized().dot(direction)>.5:
+				var passing := (direction+Vector3(-direction.z,0,direction.x)*.85).normalized()
+				if not person.test_move(person.global_transform,passing*.45): direction = passing
+		var desired := direction*minf(1.05+index*.025,person.position.distance_to(r.path[0])/maxf(delta,.001))
+		person.velocity.x = move_toward(person.velocity.x,desired.x,delta*4)
+		person.velocity.z = move_toward(person.velocity.z,desired.z,delta*4)
+		person.velocity.y = -3
 		var before := person.position
 		person.move_and_slide()
 		r.stuck = r.stuck+delta if person.position.distance_to(before)<.002 else 0.0
-		person.model.rotation.y = lerp_angle(person.model.rotation.y,atan2(direction.x,direction.z),delta*5)
+		person.model.rotation.y = lerp_angle(person.model.rotation.y,atan2(person.velocity.x,person.velocity.z),minf(delta*4,1))
 		person.play("walk")
-		person.animation.speed_scale = .8
+		var actual_speed: float = Vector2(person.position.x-before.x,person.position.z-before.z).length()/maxf(delta,.001)
+		person.animation.speed_scale = clampf(actual_speed/(1.5 if person.profession=="villager" else .8),.25,1.5)
+		if actual_speed<.08: person.play("idle")
 		if r.stuck>2:
 			r.path = path_to(person,r.door if r.job=="home" else (r.work if r.job.begins_with("work_") else stations[r.job]))
 			r.stuck = 0.0
@@ -170,6 +193,7 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		if job.begins_with("work_"): action = "hammer" if person.profession=="blacksmith" else "read"
 		elif job in ["birds","cats","ducks"] and person.profession=="villager": action = "feed"
 		elif job == "garden": action = "water"
+		elif job == "water": action = "draw_water" if person.profession=="villager" else "idle"
 		person.play(action)
 		person.animation.speed_scale = 1
 		if action == "hammer":
@@ -208,7 +232,14 @@ func arrive(r: Dictionary,index: int) -> void:
 	r.timer = 14+index*1.1
 	completed[r.job] = int(completed.get(r.job,0))+1
 	if r.job.begins_with("talk"): r.timer = 40
-	r.prop.visible = r.job in ["water","garden"]
+	r.prop.visible = r.job == "garden"
+	if r.job == "water":
+		r.timer = 5.2
+		next_water = elapsed+120
+		r.next_water = elapsed+DAY_SECONDS
+		game.activities.draw_water(r.npc,r.prop)
+	if r.job in ["ducks","cats","birds"]:
+		game.activities.throw_feed(r.npc,stations[r.job]+Vector3(0,.06,1.2))
 	if r.job == "garden":
 		game.activities.watered = true
 		game.activities.water_particles()

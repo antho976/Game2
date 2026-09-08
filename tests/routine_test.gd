@@ -25,6 +25,7 @@ func run(game: Node) -> void:
 	for job in ["water","garden","birds","cats","ducks","talk_a","talk_b"]:
 		check(day.completed.has(job),"Resident reaches activity: "+job)
 	for r in day.residents:
+		check(is_zero_approx(r.npc.rotation.y),"Moving resident has no inherited sideways rotation: "+str(r.npc.name))
 		check(r.arrivals>0,"Resident completes travel: "+str(r.npc.name))
 	day.clock = 22*30
 	for frame in 9000: await get_tree().physics_frame

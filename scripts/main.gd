@@ -24,7 +24,7 @@ var menus: CanvasLayer
 var village_day: Node
 
 func _ready() -> void:
-	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args()
+	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -84,6 +84,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--cleanup-test" in OS.get_cmdline_user_args():
+		var cleanup = load("res://tests/cleanup_test.gd").new()
+		add_child(cleanup)
+		cleanup.run(self)
 	if "--village-capture" in OS.get_cmdline_user_args():
 		var capture_suite = load("res://tests/village_capture.gd").new()
 		add_child(capture_suite)

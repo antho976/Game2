@@ -114,7 +114,7 @@ func initialize_navigation() -> void:
 	navigation.update()
 	var query := PhysicsShapeQueryParameters3D.new()
 	var probe := SphereShape3D.new()
-	probe.radius = .29
+	probe.radius = .42 # Body clearance plus half a grid step catches thin fences between samples.
 	query.shape = probe
 	query.collision_mask = 5
 	# Moving people should not permanently remove pavement from the shared map.

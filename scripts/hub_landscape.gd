@@ -17,7 +17,7 @@ func build(hub: HubKit) -> void:
 	build_hamlet()
 	var planting := [Vector3(-16,0,-12),Vector3(-10,0,-13.8),Vector3(-17,0,-3),
 		Vector3(-16.8,0,2.7),Vector3(-16.8,0,5.7),Vector3(-10.2,0,14.6),
-		Vector3(-4.3,0,13.8),Vector3(13.4,0,14.0),Vector3(16.2,0,12.2),
+		Vector3(-4.3,0,13.8),Vector3(17.8,0,14.0),Vector3(20.2,0,12.2),
 		Vector3(28.5,0,6),Vector3(28.7,0,-.7),Vector3(15.9,0,-13.6),
 		Vector3(9.7,0,-14.4),Vector3(3.1,0,12.7),Vector3(-17.4,0,11.5)]
 	for i in planting.size():
@@ -547,7 +547,7 @@ void fragment() {
 		kit.world.box(Vector3(stream_x(3),.73,3+side*.77),Vector3(5,.10,.10),kit.world.wood)
 		for x in [-2.1,0,2.1]:
 			kit.world.box(Vector3(stream_x(3)+x,.45,3+side*.77),Vector3(.12,.9,.12),kit.world.wood)
-	for center in [Vector3(24,0,9),Vector3(-21.5,0,-13),Vector3(30,0,-19)]:
+	for center in [Vector3(-21.5,0,-13),Vector3(30,0,-19)]:
 		center.y = terrain_height(center)
 		var log := shape(self,center+Vector3(0,.35,0),Vector3(1.9,.30,.34),Color(.25,.19,.12))
 		log.rotation.y = rng.randf()*PI

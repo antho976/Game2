@@ -75,7 +75,7 @@ func build(target: HubWorld) -> void:
 		resident.apply_variation()
 		resident.rotation.y = PI/2 if i == 0 else -PI/2
 	for lamp_pos in [Vector3(-4.4,0,-5.5),Vector3(3.1,0,-9),Vector3(-5.8,0,5.7),Vector3(9.6,0,6.7),Vector3(14,0,-3),Vector3(24,0,6.2)]:
-		asset("street_lantern",lamp_pos)
+		asset("street_lantern",lamp_pos,Vector3(.26,2.8,.26))
 		var lamp = OmniLight3D.new()
 		lamp.position = lamp_pos + Vector3(.43,2.35,0)
 		lamp.light_color = Color(1,.83,.62)

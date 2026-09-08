@@ -54,3 +54,7 @@ Native three-minute stability and pond traversal check: `./play.fish -- --polish
 The expanded eastern court contains a reactive training dummy and a stone portal with an animated veil. Portal destinations and weapon combat are still outside this hub prototype. The garden is maintained by residents rather than a required player chore.
 
 Routine simulation: `./play.fish --headless --fixed-fps 60 -- --routine-test`. Day/night visual captures: `./play.fish -- --village-capture`.
+
+Feeding now has a timed hand release and visible food trajectories. Well visits have a shared two-minute cooldown and a once-per-day limit per resident, with a bucket-lowering and hauling animation. Small props, lamp posts and garden fences have traversal collision. Interaction checks: `./play.fish --headless --fixed-fps 60 -- --cleanup-test`.
+
+Ducks use capsule bodies and separation steering, with individual head dips while feeding. Navigation leaves extra clearance around thin fences and chooses a reachable starting cell; the cleanup regression exercises the southeast garden fence and duck gathering.

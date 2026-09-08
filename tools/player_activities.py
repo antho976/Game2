@@ -42,11 +42,11 @@ for frame in range(1,26):
         bone.keyframe_insert(data_path='rotation_euler',frame=frame,group=bone.name)
         bone.keyframe_insert(data_path='location',frame=frame,group=bone.name)
 action.frame_range=(1,25)
-for clip in ['pet','water','feed','sit']:
+for clip in ['pet','water','feed','sit','draw_water']:
     action=bpy.data.actions.new('villager_'+clip);action.use_fake_user=True
     rig.animation_data.action=action
-    for frame in range(1,62,3):
-        t=(frame-1)/60;phase=t*math.tau
+    for frame in range(1,38 if clip=='feed' else 62,3):
+        t=(frame-1)/(36 if clip=='feed' else 60);phase=t*math.tau
         for bone in rig.pose.bones:
             bone.rotation_mode='XYZ';bone.rotation_euler=(0,0,0);bone.location=(0,0,0)
         def rx(name,value):rig.pose.bones[name].rotation_euler.x=value
@@ -67,13 +67,23 @@ for clip in ['pet','water','feed','sit']:
             rx('UpperArm.R',-.78);rx('Forearm.R',-.25+math.sin(phase)*.09)
             rx('UpperArm.L',-.48);rx('Forearm.L',-.55)
         elif clip=='feed':
-            rx('Chest',.1);rx('Head',.15)
-            rx('UpperArm.L',-.55);rx('Forearm.L',-1.1)
-            rx('UpperArm.R',-.55+math.sin(phase)*.45);rx('Forearm.R',-.65-math.sin(phase)*.35)
+            def smooth(a,b,x):
+                u=max(0,min(1,(x-a)/(b-a)));return u*u*(3-2*u)
+            prepare=smooth(0,.32,t);release=smooth(.32,.48,t);recover=smooth(.62,1,t)
+            rx('Chest',.08+.06*release*(1-recover));rx('Head',.12)
+            rx('UpperArm.L',-.3);rx('Forearm.L',-.9)
+            rx('UpperArm.R',(-.2-.4*prepare-.35*release)*(1-recover))
+            rx('Forearm.R',(-.2-1.0*prepare+.95*release)*(1-recover))
+        elif clip=='draw_water':
+            rx('Chest',.16+.08*math.sin(phase))
+            rx('Head',.20)
+            for side,offset in [('L',0),('R',math.pi)]:
+                rx('UpperArm.'+side,-.7+.22*math.sin(phase+offset))
+                rx('Forearm.'+side,-.8+.35*math.sin(phase+offset))
         for bone in rig.pose.bones:
             bone.keyframe_insert(data_path='rotation_euler',frame=frame,group=bone.name)
             bone.keyframe_insert(data_path='location',frame=frame,group=bone.name)
-    action.frame_range=(1,61)
+    action.frame_range=(1,37 if clip=='feed' else 61)
 rig.animation_data.action=None
 for track in list(rig.animation_data.nla_tracks):rig.animation_data.nla_tracks.remove(track)
 for action in bpy.data.actions:

@@ -39,7 +39,7 @@ func _ready() -> void:
 
 func play(action: String) -> void:
 	for clip in animation.get_animation_list():
-		if clip.ends_with("_"+action) and current != clip:
+		if clip.ends_with("villager_"+action) and current != clip:
 			current = clip
 			animation.play(clip,.18)
 			return

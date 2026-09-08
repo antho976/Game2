@@ -27,6 +27,8 @@ func build(hub: HubKit) -> void:
 		mesh.material_override = kit.world.rough_material([Color(.44,.25,.15),Color(.25,.34,.31),Color(.49,.37,.24),Color(.38,.24,.20)][i])
 		add_child(mesh)
 		kit.landscape.flowers(p+Vector3(-1.75,.3,2.35),i)
+		kit.world.block(p+Vector3(-1.75,.25,2.35),Vector3(.42,.5,.42))
+		kit.world.block(p+Vector3(1.82,.35,2.22),Vector3(.55,.7,.7))
 		# Different threshold details identify each household.
 		if i == 0:
 			for j in 4:
@@ -35,10 +37,7 @@ func build(hub: HubKit) -> void:
 			kit.landscape.flowers(p+Vector3(2.2,0,1.2),1)
 		elif i == 2:
 			for j in 2:
-				kit.world.box(p+Vector3(-2.45,.24+j*.4,1.3),Vector3(.65,.4,.55),kit.world.wood).rotation.y = j*.18
-		else:
-			var mat := kit.world.rough_material(Color(.33,.4,.36))
-			kit.world.box(p+Vector3(.3,2.1,2.5),Vector3(1.6,.08,.7),mat).rotation.x = -.12
+				kit.world.box(p+Vector3(-2.45,.24+j*.4,1.3),Vector3(.65,.4,.55),kit.world.wood,true).rotation.y = j*.18
 	# Moss and leaf litter collect at seams and edges, with clear walking centers.
 	var moss := kit.world.rough_material(Color(.23,.29,.16))
 	var leaf := kit.world.rough_material(Color(.42,.30,.13))

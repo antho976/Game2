@@ -26,16 +26,40 @@ func build() -> void:
 	points.append({"id":"pond_sit","pos":Vector3(-11.1,0,4.25),"radius":1.7,"text":"Sit by the pond"})
 	points.append({"id":"feed","pos":Vector3(-8.15,0,8.25),"radius":2.0,"text":"Scatter feed for the ducks"})
 	for i in 4:
-		var duck := asset("mallard",POND+Vector3(cos(i*1.7)*1.65,.085,sin(i*1.7)*1.15))
+		var duck := CharacterBody3D.new()
 		duck.name = "PondDuck%d" % i
-		duck.scale *= .95 if i == 0 else (.65 if i == 3 else .83)
-		var ring := ripple(duck.position, .32, .37)
-		ducks.append({"model":duck,"phase":float(i)*1.7,"wake":ring,"mode":"swim","fed":false})
+		duck.position = POND+Vector3(cos(i*1.7)*1.65,.085,sin(i*1.7)*1.15)
+		duck.collision_layer = 16
+		duck.collision_mask = 16
+		duck.motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+		add_child(duck)
+		var art := asset("mallard",duck.position)
+		art.reparent(duck)
+		var size := .95 if i==0 else (.65 if i==3 else .83)
+		art.scale *= size
+		var collider := CollisionShape3D.new()
+		var shape := CapsuleShape3D.new()
+		shape.radius = .22*size
+		shape.height = .78*size
+		collider.shape = shape
+		collider.rotation.x = PI/2
+		collider.position.y = .22*size
+		duck.add_child(collider)
+		var head := Node3D.new()
+		head.name = "FeedingHeadPivot"
+		art.add_child(head)
+		head.position = Vector3(0,.20,.22)
+		for part in art.find_children("*","MeshInstance3D",true,false):
+			if str(part.name).begins_with("DuckNeck") or str(part.name).begins_with("DuckHead") or str(part.name).begins_with("NeckRing") or str(part.name).begins_with("Bill") or str(part.name).begins_with("DuckEye"):
+				part.reparent(head)
+		var ring := ripple(duck.position,.32,.37)
+		ducks.append({"model":duck,"art":art,"head":head,"radius":shape.radius,"phase":float(i)*1.7,"wake":ring,"mode":"swim","fed":false})
 	asset("vegetable_bed",Vector3(10,0,8.3))
-	asset("vegetable_bed",Vector3(13.3,0,8.8)).rotation.y = .12
+	asset("vegetable_bed",Vector3(13.3,0,7.8)).rotation.y = .12
 	game.world.block(Vector3(10,.18,8.3),Vector3(2.6,.36,1.8))
-	game.world.block(Vector3(13.3,.18,8.8),Vector3(2.8,.36,2))
+	game.world.block(Vector3(13.3,.18,7.8),Vector3(2.8,.36,2))
 	can = asset("watering_can",Vector3(8.4,.05,8.3))
+	game.world.block(Vector3(8.4,.22,8.3),Vector3(.4,.44,.4))
 
 	points.append({"id":"portal","pos":Vector3(21,0,-6.0),"radius":2.1,"text":"Listen to the portal"})
 	points.append({"id":"dummy","pos":Vector3(21.5,0,4.2),"radius":1.8,"text":"Test the training dummy"})
@@ -52,8 +76,9 @@ func build() -> void:
 		bench.rotation.z = .04*sin(i)
 	world.box(Vector3(11.5,.65,11.4),Vector3(3.5,.10,.10),world.wood)
 	world.box(Vector3(11.5,.36,11.4),Vector3(3.5,.10,.10),world.wood)
+	world.block(Vector3(11.5,.43,11.4),Vector3(3.6,.86,.18))
 	# A washing line between two houses, rather than duplicated street furniture.
-	for x in [-10.3,-7.8]: world.box(Vector3(x,1,-5.5),Vector3(.09,2,.09),world.wood)
+	for x in [-10.3,-7.8]: world.box(Vector3(x,1,-5.5),Vector3(.12,2,.12),world.wood,true)
 	world.box(Vector3(-9.05,1.85,-5.5),Vector3(2.6,.025,.025),world.wood)
 	for i in 4:
 		var cloth := MeshInstance3D.new()
@@ -92,14 +117,14 @@ func ripple(pos: Vector3,inner: float,outer: float) -> MeshInstance3D:
 	add_child(node)
 	return node
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	elapsed += delta
 	for duck in ducks:
 		var angle: float = elapsed*.11+duck.phase
 		var target := POND+Vector3(cos(angle)*1.85,.085,sin(angle)*1.2)
 		duck.mode = "swim"
 		if elapsed < feed_until:
-			target = POND+Vector3(1.7+cos(duck.phase)*.18,.085,sin(duck.phase)*.5)
+			target = POND+Vector3(1.7+cos(duck.phase)*.45,.085,sin(duck.phase)*.8)
 			duck.mode = "feeding"
 		else:
 			var away: Vector3 = duck.model.position-game.player.position
@@ -109,11 +134,24 @@ func _process(delta: float) -> void:
 				duck.mode = "avoid"
 		var direction: Vector3 = target-duck.model.position
 		direction.y = 0
-		if direction.length() > .05:
-			duck.model.position += direction.normalized()*minf(delta*.65,direction.length())
-			duck.model.rotation.y = lerp_angle(duck.model.rotation.y,atan2(direction.x,direction.z),delta*2.5)
-		duck.model.position.y = .085+sin(elapsed*2+duck.phase)*.013
-		duck.model.rotation.z = sin(elapsed*2+duck.phase)*.035
+		var feeding: bool = duck.mode=="feeding" and direction.length()<.6
+		var velocity := direction.normalized()*minf(.65,direction.length()*2)
+		for other in ducks:
+			if other==duck: continue
+			var away: Vector3 = duck.model.position-other.model.position
+			away.y = 0
+			var clearance: float = duck.radius+other.radius+.28
+			if away.length()<clearance:
+				velocity += away.normalized()*(clearance-away.length())*2
+		duck.model.velocity = duck.model.velocity.move_toward(velocity,delta*1.5)
+		duck.model.move_and_slide()
+		if duck.model.velocity.length()>.08:
+			duck.model.rotation.y = lerp_angle(duck.model.rotation.y,atan2(duck.model.velocity.x,duck.model.velocity.z),delta*2.5)
+		duck.art.position.y = sin(elapsed*2+duck.phase)*.013
+		duck.art.rotation.z = sin(elapsed*2+duck.phase)*.025
+		var dip: float = .9+.42*(.5+.5*sin(elapsed*7+duck.phase)) if feeding else 0.0
+		duck.head.rotation.x = lerpf(duck.head.rotation.x,dip,minf(delta*8,1))
+		duck.fed = feeding
 		duck.wake.position = Vector3(duck.model.position.x,.102,duck.model.position.z)
 		var size := .85+sin(elapsed*1.4+duck.phase)*.12
 		duck.wake.scale = Vector3(size,.08,size*.75)
@@ -146,6 +184,7 @@ func interact(id: String) -> void:
 			feed_until = elapsed+16
 			fed_count += 1
 			game.player.act("feed",POND,1.3)
+			throw_feed(game.player, POND+Vector3(1.7,.12,0))
 			game.toast("The ducks paddle over for a closer look.")
 			for i in 8:
 				var ring := ripple(POND+Vector3(1.7+rng.randf_range(-.3,.3),0,rng.randf_range(-.6,.6)),.04,.06)
@@ -221,3 +260,66 @@ func bell_sound() -> void:
 	add_child(audio)
 	audio.finished.connect(audio.queue_free)
 	audio.play()
+
+var feed_releases := 0
+var water_draws := 0
+func throw_feed(person: Node3D,target: Vector3) -> void:
+	# Release on the extension of the authored throw, not at the beginning of the gesture.
+	await get_tree().create_timer(.5).timeout
+	if not is_instance_valid(person): return
+	var skeletons = person.model.find_children("*","Skeleton3D",true,false)
+	var start: Vector3 = person.global_position+Vector3(0,1,0)
+	if not skeletons.is_empty():
+		var skeleton: Skeleton3D = skeletons[0]
+		start = skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("Hand.R")).origin
+	feed_releases += 1
+	var mesh := SphereMesh.new()
+	mesh.radius = .027
+	mesh.height = .04
+	mesh.radial_segments = 5
+	mesh.rings = 2
+	var material = game.flat_material(Color(.78,.59,.28))
+	for i in 14:
+		var seed := MeshInstance3D.new()
+		seed.name = "ThrownFeed"
+		seed.mesh = mesh
+		seed.material_override = material
+		add_child(seed)
+		var end: Vector3 = target+Vector3(rng.randf_range(-.45,.45),0,rng.randf_range(-.35,.35))
+		var tween := create_tween()
+		tween.tween_method(func(t: float): seed.global_position = start.lerp(end,t)+Vector3.UP*sin(t*PI)*.45,0.0,1.0,.65+rng.randf()*.2)
+		tween.tween_interval(2)
+		tween.tween_property(seed,"scale",Vector3.ZERO,.5)
+		tween.tween_callback(seed.queue_free)
+
+func draw_water(person: Node3D, carried: Node3D) -> void:
+	water_draws += 1
+	var bucket := MeshInstance3D.new()
+	bucket.name = "WellDrawBucket"
+	bucket.mesh = CylinderMesh.new()
+	bucket.mesh.top_radius = .17
+	bucket.mesh.bottom_radius = .13
+	bucket.mesh.height = .3
+	bucket.material_override = game.world.wood
+	bucket.position = Vector3(.25,1.2,.3)
+	add_child(bucket)
+	var rope := MeshInstance3D.new()
+	rope.mesh = CylinderMesh.new()
+	rope.mesh.top_radius = .012
+	rope.mesh.bottom_radius = .012
+	rope.mesh.height = 1
+	rope.material_override = game.world.wood
+	add_child(rope)
+	var tween := create_tween()
+	var lower := func(y: float):
+		bucket.position.y = y
+		rope.position = Vector3(.25,(2.35+y)*.5,.3)
+		rope.scale.y = 2.35-y
+	tween.tween_method(lower,1.2,.42,1.8)
+	tween.tween_interval(.6)
+	tween.tween_method(lower,.42,1.35,2.4)
+	tween.tween_callback(func():
+		if is_instance_valid(person) and is_instance_valid(carried): carried.show()
+		bucket.queue_free()
+		rope.queue_free()
+	)
