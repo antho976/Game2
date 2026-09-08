@@ -65,7 +65,7 @@ func plantable(p: Vector3) -> bool:
 		if absf(p.x-center.x)<3.4 and absf(p.z-center.z)<3.6: return false
 	if absf(p.x) < 2.2 and p.z < -16: return false
 	if kit.on_path(Vector2(p.x,p.z)): return false
-	if Vector2(p.x-POND.x,(p.z-POND.z)*1.25).length() < 3.3: return false
+	if Vector2(p.x-POND.x,(p.z-POND.z)*1.25).length() < 3.9: return false
 	for c in [Vector3(-6.5,0,-10),Vector3(4.6,0,-12.2),Vector3(-13.1,0,-6.8),Vector3(13.5,0,-11.6),Vector3(-8,0,0),Vector3(10,0,-3.5)]:
 		if absf(p.x-c.x) < 2.9 and absf(p.z-c.z) < 2.8: return false
 	return true
@@ -151,7 +151,7 @@ func pond() -> void:
 	for i in 56:
 		var angle := i*TAU/56
 		var radius := 1.0+.055*sin(angle*3+.4)+.035*sin(angle*7)
-		rim.append(Vector3(cos(angle)*3.08*radius,0,sin(angle)*2.15*radius))
+		rim.append(Vector3(cos(angle)*3.55*radius,0,sin(angle)*2.55*radius))
 	var bank := polygon_surface(rim,1.10,.035,Color(.37,.36,.23))
 	bank.name = "PondShore"
 	bank.position += POND
@@ -194,8 +194,8 @@ void fragment() {
 		# Leave shallow planted sections instead of a perfect ring of identical rocks.
 		if i in [4,5,6,15,16,26]: continue
 		var radius := 1.0+.055*sin(angle*3+.4)+.035*sin(angle*7)
-		var pos := POND+Vector3(cos(angle)*3.12*radius,.12,sin(angle)*2.20*radius)
-		var stone := shape(self,pos,Vector3(rng.randf_range(.22,.50),rng.randf_range(.12,.29),rng.randf_range(.20,.38)),Color(.37,.41,.32))
+		var pos := POND+Vector3(cos(angle)*3.60*radius,.12,sin(angle)*2.60*radius)
+		var stone := preload("res://scripts/hub_surfaces.gd").rock(self,pos,Vector3(rng.randf_range(.25,.48),rng.randf_range(.14,.26),rng.randf_range(.23,.38)),i)
 		stone.rotation.y = rng.randf()*TAU
 	for i in 7:
 		var pos := POND+Vector3(rng.randf_range(-1.65,1.5),.103,rng.randf_range(-1.1,1.1))
@@ -220,9 +220,9 @@ void fragment() {
 			var blade := shape(self,pos+Vector3(.08,height*.32,0),Vector3(.03,height*.34,.012),Color(.34,.44,.17))
 			blade.rotation.z = -.28
 	# A small stone spring feeds the western bank.
-	var spring := POND+Vector3(-2.65,0,-.3)
+	var spring := POND+Vector3(-3.15,0,-.3)
 	for i in 7:
-		shape(self,spring+Vector3(rng.randf_range(-.4,.2),.15+i*.075,rng.randf_range(-.35,.35)),Vector3(.48,.23,.38),Color(.34,.38,.31))
+		preload("res://scripts/hub_surfaces.gd").rock(self,spring+Vector3(rng.randf_range(-.4,.2),.15+i*.075,rng.randf_range(-.35,.35)),Vector3(.40,.20,.33),i+50)
 	var fall := MeshInstance3D.new()
 	var stream := BoxMesh.new()
 	stream.size = Vector3(.20,.53,.06)

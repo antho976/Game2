@@ -5,6 +5,7 @@ var points: Array[Dictionary] = []
 var ducks: Array[Dictionary] = []
 var elapsed := 0.0
 var feed_until := 0.0
+var duck_food: Array[Vector3] = []
 var fed_count := 0
 var watered := false
 var water_until := 0.0
@@ -24,7 +25,7 @@ func asset(id: String,pos: Vector3) -> Node3D:
 func build() -> void:
 	rng.seed = 829
 	points.append({"id":"pond_sit","pos":Vector3(-11.1,0,4.25),"radius":1.7,"text":"Sit by the pond"})
-	points.append({"id":"feed","pos":Vector3(-8.15,0,8.25),"radius":2.0,"text":"Scatter feed for the ducks"})
+	points.append({"id":"feed","pos":Vector3(-7.85,0,8.25),"radius":2.0,"text":"Scatter feed for the ducks"})
 	for i in 4:
 		var duck := CharacterBody3D.new()
 		duck.name = "PondDuck%d" % i
@@ -123,7 +124,7 @@ func _physics_process(delta: float) -> void:
 		var target := POND+Vector3(cos(angle)*1.85,.085,sin(angle)*1.2)
 		duck.mode = "swim"
 		if elapsed < feed_until:
-			target = POND+Vector3(1.7+cos(duck.phase)*.45,.085,sin(duck.phase)*.8)
+			target = duck_food[ducks.find(duck)%duck_food.size()] if not duck_food.is_empty() else POND+Vector3(1.7+cos(duck.phase)*.45,.085,sin(duck.phase)*.8)
 			duck.mode = "feeding"
 		else:
 			var away: Vector3 = duck.model.position-game.player.position
@@ -264,14 +265,19 @@ func throw_feed(person: Node3D,target: Vector3) -> void:
 	# Release on the extension of the authored throw, not at the beginning of the gesture.
 	await get_tree().create_timer(.5).timeout
 	if not is_instance_valid(person): return
-	var skeletons = person.model.find_children("*","Skeleton3D",true,false)
+	var source: Node3D = person.model
+	if person==game.player and game.camera_mode==1:
+		source = game.camera.get_node("FirstPersonHands").arms
+	var skeletons = source.find_children("*","Skeleton3D",true,false)
 	var start: Vector3 = person.global_position+Vector3(0,1,0)
 	if not skeletons.is_empty():
 		var skeleton: Skeleton3D = skeletons[0]
 		start = skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("Hand.R")).origin
 	feed_releases += 1
+	var spots: Array[Vector3] = []
+	var for_ducks := Vector2(target.x-POND.x,target.z-POND.z).length()<3.7
 	var mesh := SphereMesh.new()
-	mesh.radius = .027
+	mesh.radius = .035
 	mesh.height = .04
 	mesh.radial_segments = 5
 	mesh.rings = 2
@@ -282,12 +288,22 @@ func throw_feed(person: Node3D,target: Vector3) -> void:
 		seed.mesh = mesh
 		seed.material_override = material
 		add_child(seed)
-		var end: Vector3 = target+Vector3(rng.randf_range(-.45,.45),0,rng.randf_range(-.35,.35))
+		var angle := (i%4)*TAU/4
+		var end: Vector3 = target+Vector3(cos(angle)*.55,0,sin(angle)*.55)
+		if i>=4: end += Vector3(rng.randf_range(-.12,.12),0,rng.randf_range(-.12,.12))
+		spots.append(end)
 		var tween := create_tween()
 		tween.tween_method(func(t: float): seed.global_position = start.lerp(end,t)+Vector3.UP*sin(t*PI)*.45,0.0,1.0,.65+rng.randf()*.2)
-		tween.tween_interval(2)
+		tween.tween_interval(18)
 		tween.tween_property(seed,"scale",Vector3.ZERO,.5)
 		tween.tween_callback(seed.queue_free)
+
+	await get_tree().create_timer(.85).timeout
+	if for_ducks:
+		duck_food.assign(spots.slice(0,4))
+		feed_until = elapsed+18
+	elif target.distance_to(game.village_day.stations.birds+Vector3(0,.06,1.2))<1:
+		game.kit.life.offer_bird_food(spots)
 
 func draw_water(person: Node3D, carried: Node3D) -> void:
 	water_draws += 1

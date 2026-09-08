@@ -6,7 +6,7 @@ var clock := 270.0
 var enabled := true
 var residents: Array[Dictionary] = []
 var reservations := {}
-var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-3.5,0,5.5),"cats":Vector3(4.4,0,3.5),"ducks":Vector3(-8.15,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
+var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-3.5,0,5.5),"cats":Vector3(4.4,0,3.5),"ducks":Vector3(-7.85,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
 var sun: DirectionalLight3D
 var environment: Environment
 var lamps: Array[OmniLight3D] = []

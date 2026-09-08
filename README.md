@@ -66,3 +66,7 @@ Options → Camera offers overhead, first-person, third-person, and far-overhead
 Cat feeding now happens on open paving. Residents alternate one visible food throw with a short idle pause, instead of looping empty-handed feeding gestures.
 
 Residents share one animal-feeding reservation, with bird feeding separated from the pond. The smith finishes his approach at the authored anvil position; sparks and sound trigger at the hammer contact frame (0.8 seconds). `--work-test` checks his return route and captures that pose.
+
+The pond is enlarged with smoother irregular textured shoreline stones. Turf uses world-space color, soil, fiber and fine-grain variation beneath the grass blades. The smith yard now has a masonry fire chamber, chimney, slate lean-to, tool bench and stock racks; the archive has a timber pergola, paved terrace, book cabinets and a writing/specimen desk. Existing interaction positions remain connected.
+
+First person displays a separate animated arms asset exported by `tools/player_activities.py`; feeding releases originate at its hand. Birds and ducks target the actual food landing positions, which remain visible long enough for the animals to gather. `--refresh-test` checks gathering and captures both workspaces and the pond.
