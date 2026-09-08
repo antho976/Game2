@@ -4,6 +4,8 @@ const Landscape = preload("res://scripts/hub_landscape.gd")
 var kit: HubKit
 var animals: Array[Dictionary] = []
 var elapsed: float = 0
+var cat_food_until := 0.0
+var cat_food_position := Vector3.ZERO
 var navigation := AStarGrid2D.new()
 var navigation_ready := false
 var rng := RandomNumberGenerator.new()
@@ -102,7 +104,7 @@ func initialize_navigation() -> void:
 	if not is_inside_tree() or is_queued_for_deletion(): return
 	await get_tree().physics_frame
 	if not is_inside_tree() or is_queued_for_deletion(): return
-	navigation.region = Rect2i(0,0,63,51)
+	navigation.region = Rect2i(0,0,75,51)
 	navigation.cell_size = Vector2.ONE*CELL
 	navigation.offset = GRID_ORIGIN
 	navigation.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
@@ -117,7 +119,7 @@ func initialize_navigation() -> void:
 	for npc in kit.npcs: excluded.append(npc.get_rid())
 	query.exclude = excluded
 	var space := get_world_3d().direct_space_state
-	for x in 63:
+	for x in 75:
 		for z in 51:
 			var point := navigation.get_point_position(Vector2i(x,z))
 			query.transform = Transform3D(Basis.IDENTITY,Vector3(point.x,.43,point.y))
@@ -251,6 +253,8 @@ func begin_flight(a: Dictionary, player: Vector3) -> void:
 func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 	if not navigation_ready: return
 	var body: CharacterBody3D = a.body
+	var food: bool = a.kind == "cat" and elapsed < cat_food_until
+	if food: player = cat_food_position
 	var offset: Vector3 = body.position-player
 	offset.y = 0
 	var distance := offset.length()
@@ -280,7 +284,7 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 				kit.world.game.play_sound("cat_meow",body.position)
 				a.interest = rng.randf_range(3,6)
 				a.decision = 0.0
-		if not a.friendly and (distance < 3.3 or (a.state == "flee" and distance < 5.5)):
+		if not food and not a.friendly and (distance < 3.3 or (a.state == "flee" and distance < 5.5)):
 			a.state = "flee"
 			a.timer = 1.8
 			if a.decision <= 0: escape_route(a,player)
@@ -289,14 +293,14 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 		elif a.state == "flee" and a.timer > 0:
 			direction = follow_route(a)
 			speed = 1.7
-		elif a.friendly and a.interest > 0 and distance < 7 and distance > 1.25:
+		elif (food or (a.friendly and a.interest > 0)) and distance < 14 and distance > 1.25:
 			a.state = "follow"
 			if a.decision <= 0:
 				a.path = route(body.position,player+offset.normalized()*1.1)
 				a.decision = .7
 			direction = follow_route(a)
 			speed = 1.3 if distance < 3 else 2.0
-		elif a.friendly and a.interest > 0:
+		elif food or (a.friendly and a.interest > 0):
 			a.state = "watch"
 			a.path.clear()
 		elif a.friendly and (a.state == "wander" or a.wander_due <= 0):

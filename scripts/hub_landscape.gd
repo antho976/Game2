@@ -4,7 +4,7 @@ var kit: HubKit
 var rng := RandomNumberGenerator.new()
 var grass_material: ShaderMaterial
 var tree_points: Array[Vector3] = []
-var hamlet_centers: Array[Vector3] = [Vector3(25,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(12,0,-27),Vector3(-13,0,-30)]
+var hamlet_centers: Array[Vector3] = [Vector3(35,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(12,0,-27),Vector3(-13,0,-30)]
 const POND := Vector3(-12,0,8.7)
 
 func build(hub: HubKit) -> void:
@@ -16,7 +16,7 @@ func build(hub: HubKit) -> void:
 	var planting := [Vector3(-16,0,-12),Vector3(-10,0,-13.8),Vector3(-17,0,-3),
 		Vector3(-16.8,0,2.7),Vector3(-16.8,0,5.7),Vector3(-10.2,0,14.6),
 		Vector3(-4.3,0,13.8),Vector3(13.4,0,14.0),Vector3(16.2,0,12.2),
-		Vector3(15.5,0,6),Vector3(16.7,0,-.7),Vector3(15.9,0,-13.6),
+		Vector3(28.5,0,6),Vector3(28.7,0,-.7),Vector3(15.9,0,-13.6),
 		Vector3(9.7,0,-14.4),Vector3(3.1,0,12.7),Vector3(-17.4,0,11.5)]
 	for i in planting.size():
 		plant_tree(planting[i],rng.randf_range(.7,1.14),i)
@@ -25,7 +25,7 @@ func build(hub: HubKit) -> void:
 		var angle := rng.randf()*TAU
 		var radius := rng.randf_range(22,55)
 		var p := Vector3(cos(angle)*radius,0,sin(angle)*radius*.84)
-		if (absf(p.x) < 21 and absf(p.z) < 18) or outside_water(p) or (absf(p.x) < 4 and p.z < 0): continue
+		if (p.x>-21 and p.x<28 and absf(p.z)<18) or outside_water(p) or (absf(p.x) < 4 and p.z < 0): continue
 		if plantable(p): plant_tree(p,rng.randf_range(.65,1.65),i)
 	for i in 16:
 		conifer(Vector3(-34+i*4.5+rng.randf_range(-1,1),0,-23-rng.randf_range(0,13)),rng.randf_range(.8,1.5))
@@ -51,7 +51,7 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 	if index % 4 == 0: birch_root_material(tree)
 	kit.trees.append(tree)
 	tree_points.append(p)
-	if absf(p.x) < 19 and p.z > -16 and p.z < 15:
+	if p.x > -19 and p.x < 26 and p.z > -16 and p.z < 15:
 		kit.world.block(p+Vector3(0,1,0),Vector3(.65,2,.65)*size)
 
 func plantable(p: Vector3) -> bool:
@@ -102,7 +102,7 @@ void fragment() {
 	var colors: Array[Color] = []
 	for i in 90000:
 		var p := Vector3(rng.randf_range(-43,43),.015,rng.randf_range(-35,35))
-		if i > 34000: p = Vector3(rng.randf_range(-18.5,18.5),.015,rng.randf_range(-15,14.5))
+		if i > 34000: p = Vector3(rng.randf_range(-18.5,25.5),.015,rng.randf_range(-15,14.5))
 		if not plantable(p): continue
 		# Keep a trimmed verge beside paving instead of rectangular walls of tall grass.
 		var verge := false
@@ -147,7 +147,7 @@ shader_type spatial;
 void fragment() {
 	float edge = smoothstep(0.26,0.5,length(UV-vec2(0.5)));
 	float waves = sin(UV.x*36.0+UV.y*19.0+TIME*0.65)*sin(UV.y*28.0-TIME*0.45);
-	ALBEDO = mix(vec3(0.014,0.060,0.064),vec3(0.055,0.11,0.067),edge*0.72) + waves*0.002;
+	ALBEDO = mix(vec3(0.10,0.24,0.24),vec3(0.22,0.32,0.18),edge*0.72) + waves*0.002;
 	ROUGHNESS = 0.44;
 	METALLIC = 0.0;
 	SPECULAR = 0.18;
@@ -408,7 +408,7 @@ func outside_water(p: Vector3) -> bool:
 	return absf(p.x-stream_x(p.z)) < 2.3 and absf(p.z) < 47
 
 func terrain_height(p: Vector3) -> float:
-	var distance := maxf(absf(p.x)-20,absf(p.z)-17)
+	var distance := maxf(maxf(p.x-27,-p.x-20),absf(p.z)-17)
 	if distance <= 0: return 0
 	var hills := 1.8+sin(p.x*.14+p.z*.05)*1.2+cos(p.z*.17-p.x*.08)*.8
 	if p.z < -23: hills += (1.0-smoothstep(-48,-23,p.z))*4
@@ -425,7 +425,7 @@ func build_outskirts() -> void:
 	for x in range(-48,48):
 		for z in range(-48,48):
 			var origin := Vector3(x*1.5,0,z*1.5)
-			if absf(origin.x) < 19 and origin.z > -16 and origin.z < 15: continue
+			if origin.x > -19 and origin.x < 26 and origin.z > -16 and origin.z < 15: continue
 			for offset in [Vector3.ZERO,Vector3(1.5,0,0),Vector3(0,0,1.5),Vector3(1.5,0,0),Vector3(1.5,0,1.5),Vector3(0,0,1.5)]:
 				var p: Vector3 = origin+offset
 				p.y = terrain_height(p)+.008
@@ -481,7 +481,7 @@ void fragment() {
 	# Dressed near-field beds fill the visible strip just behind the village walls.
 	for i in 150:
 		var p := Vector3(rng.randf_range(-35,35),0,rng.randf_range(-29,29))
-		if absf(p.x) < 20.8 and absf(p.z) < 17.4: continue
+		if p.x > -20.8 and p.x < 27.8 and absf(p.z) < 17.4: continue
 		if outside_water(p) or (absf(p.x) < 3 and p.z < -16): continue
 		p.y = terrain_height(p)
 		var shrub := Node3D.new()
@@ -490,7 +490,7 @@ void fragment() {
 		for j in 3:
 			shape(shrub,Vector3(j*.27-.27,.25+j*.07,0),Vector3(.45,.40,.4)*rng.randf_range(.7,1.4),Color(.24+j*.025,.35+j*.02,.18))
 	# Low dry-stone ruins on the eastern rise; varied masonry keeps the skyline broken.
-	var ruin := Vector3(25,0,-8)
+	var ruin := Vector3(32,0,-15)
 	ruin.y = terrain_height(ruin)
 	for ring in 5:
 		for segment in 12:

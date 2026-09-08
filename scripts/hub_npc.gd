@@ -16,6 +16,7 @@ var variant: int = 0
 var idle_time: float = 0
 var stuck_time: float = 0
 var walk_speed: float = .65
+var routine_managed := false
 
 func _ready() -> void:
 	home = position
@@ -28,7 +29,7 @@ func _ready() -> void:
 	collider.shape = shape
 	collider.position.y = .9
 	add_child(collider)
-	model = load("res://assets/hub/" + profession + ".glb").instantiate()
+	model = load("res://assets/village/hub_player.glb" if profession == "villager" else "res://assets/hub/" + profession + ".glb").instantiate()
 	add_child(model)
 	var players = model.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
@@ -49,6 +50,7 @@ func play(action: String) -> void:
 			return
 
 func _physics_process(delta: float) -> void:
+	if routine_managed: return
 	idle_time += delta
 	velocity = Vector3(0,-2,0)
 	if profession == "blacksmith" and animation and current_clip.ends_with("_hammer"):

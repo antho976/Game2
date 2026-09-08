@@ -69,7 +69,7 @@ func run(game: Node) -> void:
 	game.activities.interact("water")
 	check(game.activities.watered,"Repeated watering does not reset the garden action")
 	await frames(210)
-	game.player.position = Vector3(7.2,.05,11.2)
+	game.player.position = Vector3(5.4,.05,10.1)
 	game.activities.interact("sit")
 	await frames(15)
 	check(game.player.current.ends_with("_sit") and game.player.activity=="sit","Bench uses the sitting pose")

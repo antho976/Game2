@@ -28,4 +28,4 @@ The author wants to explore the best result achievable with AI over two days, wi
 
 ## Current state
 
-The hub now reuses selected crawler scenery and adds original Blender props, animals, and skeletal interaction animations. The asymmetric village includes a pond, ducks, cats, reactive birds, garden watering, a bench, and a bell. More detailed NPC schedules and all progression systems remain deferred.
+The hub now reuses selected crawler scenery and adds original Blender props, animals, and skeletal interaction animations. The asymmetric village includes a pond, ducks, cats, reactive birds, garden watering, a bench, and a bell. Residents now follow staggered routines with shared-station reservations, animal feeding, gardening, conversations, and nightly returns home. An expanded eastern courtyard holds the dummy and portal. All progression systems and portal destinations remain deferred.

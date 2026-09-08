@@ -178,6 +178,7 @@ func reset_player(pos: Vector3) -> void:
 func new_game() -> void:
 	reset_player(Vector3(0,.1,8.5))
 	game.activities.watered = false
+	game.village_day.clock = 270.0
 	for animal in game.kit.life.animals:
 		if animal.kind == "cat": animal.pets = 0
 	resume()
@@ -187,9 +188,10 @@ func continue_game() -> void:
 	var data := ConfigFile.new()
 	if data.load(save_path) != OK: return
 	var pos: Vector3 = data.get_value("hub","position",Vector3(0,.1,8.5))
-	if not pos.is_finite() or absf(pos.x)>24 or absf(pos.z)>24 or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
+	if not pos.is_finite() or (pos.x < -19 or pos.x > 26) or absf(pos.z)>24 or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
 	reset_player(pos)
 	game.activities.watered = data.get_value("hub","watered",false)
+	game.village_day.clock = float(data.get_value("hub","clock",270.0))
 	resume()
 
 func save_game() -> void:
@@ -198,6 +200,7 @@ func save_game() -> void:
 	var pos: Vector3 = game.player.seat_exit if game.player.activity == "sit" else game.player.last_safe
 	data.set_value("hub","position",pos)
 	data.set_value("hub","watered",game.activities.watered)
+	data.set_value("hub","clock",game.village_day.clock)
 	var error := data.save(save_path)
 	if error != OK: game.toast("Could not save this visit.")
 

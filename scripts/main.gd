@@ -21,9 +21,10 @@ var nearest := ""
 var nearest_pos := Vector3.ZERO
 var muted := false
 var menus: CanvasLayer
+var village_day: Node
 
 func _ready() -> void:
-	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args()
+	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -65,6 +66,10 @@ func _ready() -> void:
 	add_child(camera)
 	update_camera(1.0)
 	build_ui()
+	village_day = preload("res://scripts/village_day.gd").new()
+	village_day.game = self
+	add_child(village_day)
+	village_day.build()
 	menus = preload("res://scripts/menu.gd").new()
 	menus.game = self
 	add_child(menus)
@@ -77,6 +82,14 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--village-capture" in OS.get_cmdline_user_args():
+		var capture_suite = load("res://tests/village_capture.gd").new()
+		add_child(capture_suite)
+		capture_suite.run(self)
+	if "--routine-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/routine_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--polish-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/polish_test.gd").new()
 		add_child(suite)
@@ -153,12 +166,6 @@ func build_ui() -> void:
 	add_child(ui)
 	title = label("THE VILLAGE",16,Color(.95,.91,.78),Vector2(30,25))
 	label("A quiet place to return to",13,Color(.83,.85,.79),Vector2(30,49))
-	var controls := label("WASD  walk   ·   SHIFT  jog   ·   F  interact   ·   Wheel  zoom   ·   Middle drag  rotate   ·   TAB  overview",14,Color(.94,.91,.83),Vector2.ZERO)
-	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	controls.offset_top = -40
-	controls.offset_bottom = -12
-	controls.text += "   ·   ESC  menu"
 	prompt = label("",20,Color(1,.96,.82),Vector2.ZERO)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)

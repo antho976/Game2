@@ -20,9 +20,9 @@ Or import `project.godot` into Godot 4.7 and press F5. The launcher imports asse
 
 ## Things to try
 
-Approach the feeding birds and watch them fly to another patch. Pet a friendly cat. Scatter feed at the pond bank and watch the ducks gather. Water the kitchen garden. Sit on either bench and move to stand up. The pond bench leaves the western house lane clear, and ducks can be fed from the open bank. Ring the village bell.
+Approach the feeding birds and watch them fly to another patch. Pet a friendly cat. Scatter feed at the pond bank and watch the ducks gather. Watch the gardener tend the kitchen garden. Sit on either bench and move to stand up. The pond bench leaves the western house lane clear, and ducks can be fed from the open bank. Ring the village bell.
 
-The blacksmith works at his anvil and the researcher reads at the pavilion. Their locations are present; purchasing, research, combat, and progression are intentionally deferred. Detailed resident schedules are also deferred. Your position and garden watering state are saved every 15 seconds and when returning to the main menu or quitting. Feeding remains a temporary activity. Continue restores the saved visit; New Game replaces it after confirmation.
+The blacksmith works at his anvil and the researcher reads at the pavilion. Their locations are present; purchasing, research, combat, and progression are intentionally deferred. Residents collect water, feed birds, cats and ducks, tend the garden, meet to talk, and return to assigned houses at staggered evening times. Shared stations are reserved while a resident travels to and uses them. A twelve-minute day/night cycle changes the lighting and lamp intensity. Your position, village time, and garden watering state are saved every 15 seconds and when returning to the main menu or quitting. Feeding remains a temporary activity. Continue restores the saved visit; New Game replaces it after confirmation.
 
 The title screen orbits the live village. Settings opens a dedicated page, including an optional FPS counter. Options persist display mode, frame limit, VSync, 3D resolution scale, and volume. Defaults use 60 FPS and 85% 3D resolution while keeping the interface sharp. Fullscreen retains the screen aspect ratio, with the HUD anchored to its edges.
 
@@ -49,3 +49,7 @@ Native menu and fullscreen checks: `./play.fish -- --menu-test` (uses separate t
 The runtime checks cover movement, interaction selection, imported animation clips, animal reactions, cat limb attachment, house-lane clearance, access paths, pond feeding, garden state, and bench exit. Visual captures can be generated locally with `./play.fish -- --capture`; these are not committed.
 
 Native three-minute stability and pond traversal check: `./play.fish -- --polish-test`. This exercises movement, repeated fullscreen transitions, seating, bank access, and frame delivery using isolated test save files.
+
+The expanded eastern court contains a reactive training dummy and a stone portal with an animated veil. Portal destinations and weapon combat are still outside this hub prototype. The garden is maintained by residents rather than a required player chore.
+
+Routine simulation: `./play.fish --headless --fixed-fps 60 -- --routine-test`. Day/night visual captures: `./play.fish -- --village-capture`.

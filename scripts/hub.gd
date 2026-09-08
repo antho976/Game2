@@ -9,6 +9,7 @@ var forge_light: OmniLight3D
 var npcs: Array[HubNPC] = []
 var landscape: Node3D
 var life: Node3D
+var practice_dummy: Node3D
 
 const SMITH_POINT = Vector3(-6.5,0,4.0)
 const ARCHIVE_POINT = Vector3(10,0,-.5)
@@ -49,7 +50,14 @@ func build(target: HubWorld) -> void:
 	plushie.position = Vector3(0,1.11,.87)
 	well.add_child(plushie)
 	asset("garden_bench",Vector3(-11.1,0,5.2),Vector3(2,1.2,.7)).rotation.y = .1
-	asset("garden_bench",Vector3(7.2,0,12.2),Vector3(2,1.2,.7)).rotation.y = -.25
+	asset("garden_bench",Vector3(5.4,0,11.0),Vector3(2,1.2,.7)).rotation.y = PI
+	# A small terrace connects the seat to the lane and separates it from the working garden.
+	world.box(Vector3(5.4,-.035,10.5),Vector3(3.1,.1,2.5),world.stone[3])
+	practice_dummy = preload("res://scripts/practice_dummy.gd").new()
+	practice_dummy.kit = self
+	practice_dummy.position = Vector3(21.5,0,2.8)
+	add_child(practice_dummy)
+	world.block(Vector3(21.5,1,2.8),Vector3(.8,2,.65))
 	# Residents occupy purposeful places; full schedules come in a later pass.
 	var gardener = npc("villager",Vector3(11.9,0,7.2))
 	gardener.name = "KitchenGardener"
@@ -63,19 +71,21 @@ func build(target: HubWorld) -> void:
 		resident.variant = 4+i
 		resident.apply_variation()
 		resident.rotation.y = PI/2 if i == 0 else -PI/2
-	for lamp_pos in [Vector3(-4.4,0,-5.5),Vector3(3.1,0,-9),Vector3(-5.8,0,5.7),Vector3(9.6,0,6.7),Vector3(14,0,-3)]:
+	for lamp_pos in [Vector3(-4.4,0,-5.5),Vector3(3.1,0,-9),Vector3(-5.8,0,5.7),Vector3(9.6,0,6.7),Vector3(14,0,-3),Vector3(24,0,6.2)]:
 		asset("street_lantern",lamp_pos)
 		var lamp = OmniLight3D.new()
 		lamp.position = lamp_pos + Vector3(.43,2.35,0)
-		lamp.light_color = Color(1,.66,.29)
+		lamp.light_color = Color(1,.83,.62)
 		lamp.light_energy = 1.1
-		lamp.omni_range = 5
-		lamp.shadow_enabled = true
+		lamp.omni_range = 8
+		lamp.omni_attenuation = 1.6
+		lamp.light_size = .65
+		lamp.shadow_enabled = false
 		add_child(lamp)
 	build_boundaries()
-	var keeper = npc("villager",Vector3(1.15,0,-11.8))
+	var keeper = npc("villager",Vector3(18.7,0,-6.5))
 	keeper.name = "Gatekeeper"
-	world.interactions.append({"id":"enter","pos":Vector3(0,0,-11.2),"text":"The northern road"})
+	world.interactions.append({"id":"enter","pos":Vector3(21,0,-6.0),"text":"The village portal"})
 	build_gateway()
 	setup_forge()
 	landscape = preload("res://scripts/hub_landscape.gd").new()
@@ -92,6 +102,7 @@ func build(target: HubWorld) -> void:
 
 func on_path(p: Vector2) -> bool:
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
+	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25) or (absf(p.x-21)<1.5 and p.y>-8.5 and p.y<4) or p.distance_to(Vector2(21,-6.5))<3.4
 	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -14.7 and p.y < 16
 	var work_lane: bool = absf(p.y-3.4) < 1.25 and absf(p.x) < 11
 	var research_lane: bool = p.distance_to(Vector2(10,-.8)) < 2.5 or (p.x > 5 and p.x < 11 and absf(p.y+1.0) < .9)
@@ -104,7 +115,7 @@ func on_path(p: Vector2) -> bool:
 	var west_door: bool = absf(p.x+13.75) < 1.05 and p.y > -5.3 and p.y < 4.9
 	var pond_walk: bool = p.distance_to(Vector2(-11.1,5.0)) < 1.5 or (p.x > -12.2 and p.x < -8 and absf(p.y-4.7) < .7)
 	var practice: bool = p.distance_to(Vector2(9.5,8)) < 3.1 or (absf(p.x-7.2) < .85 and p.y > 3.4 and p.y < 10.5)
-	return (p.distance_to(Vector2(7.2,11.3)) < 1.2) or dock_lane or west_door or research_lane or square or road or work_lane or home_lane or doorstep or yard or pond_walk or practice
+	return (p.distance_to(Vector2(5.4,10.5)) < 1.7) or p.distance_to(Vector2(21.5,3.5)) < 3.2 or east_lane or dock_lane or west_door or research_lane or square or road or work_lane or home_lane or doorstep or yard or pond_walk or practice
 
 func build_ground() -> void:
 	var soil = world.rough_material(Color(.30,.36,.20))
@@ -118,7 +129,7 @@ func build_ground() -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 193
 	for row in range(-45,45):
-		for col in range(-39,40):
+		for col in range(-39,54):
 			var p = Vector2(col*.49+(row%2)*.245,row*.36)
 			if not on_path(p): continue
 			if rng.randf() < .025: continue
@@ -233,40 +244,38 @@ func sparks() -> void:
 	particles.finished.connect(particles.queue_free)
 
 func build_gateway() -> void:
-	for side in [-1,1]:
-		for tier in 7:
-			world.box(Vector3(side*2.1,.28+tier*.5,-14),Vector3(.85,.47,.9),world.stone[tier%6],true)
-	world.box(Vector3(0,3.55,-14),Vector3(5.1,.4,1),world.stone[4])
-	for i in 7:
-		world.box(Vector3((i-3)*.52,1.5,-14),Vector3(.12,3,.12),world.wood)
-	world.box(Vector3(0,1.7,-14),Vector3(3.8,.15,.2),world.wood)
+	var portal := preload("res://scripts/village_portal.gd").new()
+	portal.position = Vector3(21,0,-8.5)
+	portal.kit = self
+	add_child(portal)
+	for x in [19.05,22.95]: world.block(Vector3(x,1.5,-8.5),Vector3(.85,3,.85))
 
 func build_boundaries() -> void:
 	# Continuous masonry base, overlapping coping, and planted buttresses close corners.
-	for side in [-1,1]:
-		world.box(Vector3(side*19,.48,-.5),Vector3(.72,.96,32),world.stone[2],true)
+	for edge_x in [-19.0,26.0]:
+		world.box(Vector3(edge_x,.48,-.5),Vector3(.72,.96,32),world.stone[2],true)
 	for z in [-16.0,15.0]:
-		world.box(Vector3(0,.48,z),Vector3(38.7,.96,.72),world.stone[2],true)
-	for side in [-1,1]:
+		world.box(Vector3(3.5,.48,z),Vector3(45.7,.96,.72),world.stone[2],true)
+	for edge_x in [-19.0,26.0]:
 		for i in 33:
 			var z := -16.0+i
-			world.box(Vector3(side*19,1.02,z),Vector3(.87,.18,1.03),world.stone[i%6])
+			world.box(Vector3(edge_x,1.02,z),Vector3(.87,.18,1.03),world.stone[i%6])
 	for z in [-16.0,15.0]:
-		for i in 39:
+		for i in 46:
 			world.box(Vector3(-19+i,1.02,z),Vector3(1.03,.18,.87),world.stone[i%6])
-	for x in [-19.0,19.0]:
+	for x in [-19.0,26.0]:
 		for z in [-16.0,-8,0,8,15]:
 			world.box(Vector3(x,.7,z),Vector3(1.08,1.4,1.08),world.stone[3],true)
 			world.box(Vector3(x,1.47,z),Vector3(1.2,.16,1.2),world.stone[5])
 
 	# Exposed courses break up the retaining face; the continuous core carries collision.
 	for row in 3:
-		for i in 39:
+		for i in 46:
 			var x := -18.8+i*.98+(row%2)*.20
-			if x>19: continue
+			if x>26: continue
 			for z in [-16.0,15.0]:
 				world.box(Vector3(x,.17+row*.29,z),Vector3(.91,.26,.78),world.stone[(i+row*2)%6])
 		for i in 32:
 			var z := -15.6+i*.98+(row%2)*.20
-			for x in [-19.0,19.0]:
+			for x in [-19.0,26.0]:
 				world.box(Vector3(x,.17+row*.29,z),Vector3(.78,.26,.91),world.stone[(i+row*2)%6])

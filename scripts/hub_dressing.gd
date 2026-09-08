@@ -51,7 +51,7 @@ func build(hub: HubKit) -> void:
 		node.rotation.y = rng.randf()*TAU
 	# Vines soften the joined boundary without hiding the walkable entrances.
 	for i in 30:
-		var p := Vector3(-18.5 if i%2 else 18.5,0,-14+i)
+		var p := Vector3(-18.5 if i%2 else 25.5,0,-14+i)
 		for j in 3:
 			kit.landscape.shape(self,p+Vector3(0,.4+j*.3,sin(i+j)*.2),Vector3(.22,.25,.30),Color(.22,.31,.17))
 

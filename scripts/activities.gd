@@ -36,8 +36,10 @@ func build() -> void:
 	game.world.block(Vector3(10,.18,8.3),Vector3(2.6,.36,1.8))
 	game.world.block(Vector3(13.3,.18,8.8),Vector3(2.8,.36,2))
 	can = asset("watering_can",Vector3(8.4,.05,8.3))
-	points.append({"id":"water","pos":Vector3(8.25,0,8.1),"radius":1.7,"text":"Water the kitchen garden"})
-	points.append({"id":"sit","pos":Vector3(7.2,0,11.2),"radius":1.7,"text":"Sit for a moment"})
+
+	points.append({"id":"portal","pos":Vector3(21,0,-6.0),"radius":2.1,"text":"Listen to the portal"})
+	points.append({"id":"dummy","pos":Vector3(21.5,0,4.2),"radius":1.8,"text":"Test the training dummy"})
+	points.append({"id":"sit","pos":Vector3(5.4,0,10.1),"radius":1.7,"text":"Sit for a moment"})
 	bell = asset("village_bell",Vector3(3.3,0,-10.5))
 	game.world.block(Vector3(3.3,1,-10.5),Vector3(1.1,2,.4))
 	points.append({"id":"bell","pos":Vector3(3.3,0,-9.6),"radius":1.8,"text":"Ring the village bell"})
@@ -61,29 +63,16 @@ func build() -> void:
 		mesh.subdivide_depth = 8
 		cloth.mesh = mesh
 		cloth.rotation.x = PI/2
-		cloth.position = Vector3(-10.05+i*.6,1.52,-5.5)
+		cloth.position = Vector3(-10.05+i*.6,1.54,-5.5)
 		var shader := Shader.new()
-		shader.code = "shader_type spatial; render_mode cull_disabled; uniform vec4 tint:source_color; void vertex(){VERTEX.y+=sin(TIME*1.8+VERTEX.x*5.0)*.06*(1.0-UV.y);} void fragment(){ALBEDO=tint.rgb;ROUGHNESS=.95;}"
+		shader.code = "shader_type spatial; render_mode cull_disabled; uniform vec4 tint:source_color; void vertex(){float free_edge=UV.y; VERTEX.y+=(sin(TIME*1.8+VERTEX.x*5.0)*.12+sin(TIME*2.9+VERTEX.z*9.0)*.035)*free_edge*free_edge;} void fragment(){ALBEDO=tint.rgb;ROUGHNESS=.95;}"
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
 		mat.set_shader_parameter("tint",[Color(.64,.57,.4),Color(.23,.35,.4),Color(.47,.28,.18),Color(.70,.66,.5)][i])
 		cloth.material_override = mat
 		add_child(cloth)
-	# Small physical signs identify service locations without opening unfinished systems.
-	signpost("BLACKSMITH",Vector3(-4.7,0,1.8))
-	signpost("RESEARCH",Vector3(6.8,0,-1.1))
+		for dx in [-.14,.14]: world.box(Vector3(-10.05+i*.6+dx,1.85,-5.5),Vector3(.04,.08,.045),world.wood)
 
-func signpost(text: String,pos: Vector3) -> void:
-	game.world.box(pos+Vector3(0,.65,0),Vector3(.11,1.3,.11),game.world.wood)
-	game.world.box(pos+Vector3(0,1.15,0),Vector3(1.25,.45,.09),game.world.wood)
-	var label := Label3D.new()
-	label.text = text
-	label.position = pos+Vector3(0,1.15,.052)
-	label.font_size = 36
-	label.pixel_size = .0025
-	label.modulate = Color(.88,.78,.54)
-	label.outline_size = 0
-	add_child(label)
 
 func ripple(pos: Vector3,inner: float,outer: float) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
@@ -145,6 +134,11 @@ func _process(delta: float) -> void:
 
 func interact(id: String) -> void:
 	match id:
+		"portal":
+			game.toast("The passage is awake. Its destination is still beyond this prototype.")
+		"dummy":
+			game.kit.practice_dummy.strike()
+			game.toast("Ready for greatsword practice, once you have a blade.")
 		"feed":
 			if elapsed < feed_until:
 				game.toast("They are still enjoying the last handful.")
@@ -172,8 +166,8 @@ func interact(id: String) -> void:
 			game.player.position = Vector3(-11.1,.02,5.2)
 			game.toast("A moment beside the water.")
 		"sit":
-			game.player.act("sit",Vector3(7.2,0,15),0)
-			game.player.position = Vector3(7.2,.02,12.15)
+			game.player.act("sit",Vector3(5.4,0,8),0)
+			game.player.position = Vector3(5.4,.02,11.0)
 			game.toast("Stay a while. Move when you are ready.")
 		"bell":
 			bell_time = 3.0
