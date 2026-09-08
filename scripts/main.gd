@@ -9,6 +9,17 @@ var prompt: Label
 var notice: Label
 var notice_time := 0.0
 var title: Label
+var camera_mode := 0 # Overhead, first person, third person, far overhead.
+var camera_distance := 15.0
+var camera_height := 19.0
+var camera_zoom := 23.0
+var camera_fov := 75.0
+var camera_pitch := 0.0
+var camera_sensitivity := .003
+
+func sync_camera_mouse() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if camera_mode==1 and not input_blocked else Input.MOUSE_MODE_VISIBLE
+
 var yaw := 0.0
 var camera_target := Vector3(0,0,7)
 var elapsed := 0.0
@@ -24,7 +35,7 @@ var menus: CanvasLayer
 var village_day: Node
 
 func _ready() -> void:
-	test_mode = "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -84,6 +95,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--camera-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/camera_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--player-visual" in OS.get_cmdline_user_args():
 		var visual = load("res://tests/player_visual.gd").new()
 		add_child(visual)
@@ -198,13 +213,35 @@ func _process(delta: float) -> void:
 		interact()
 
 func update_camera(delta: float) -> void:
-	if menus != null and menus.home:
-		yaw += delta * .055
-		camera.size = 43
-	var target: Vector3 = Vector3(0,0,-.5) if overview or (menus != null and menus.home) else player.position
-	target.y = .1
-	camera_target = camera_target.lerp(target,1.0-exp(-delta*7.0))
-	camera.position = camera_target+Vector3(0,19,15).rotated(Vector3.UP,yaw)
+	var title: bool = menus != null and menus.home
+	player.model.visible = camera_mode!=1 or title or overview
+	if title or overview:
+		if title: yaw += delta*.055
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		camera.size = 43 if title else 46
+		camera_target = camera_target.lerp(Vector3(0,.1,-.5),1-exp(-delta*7))
+		camera.position = camera_target+Vector3(0,19,15).rotated(Vector3.UP,yaw)
+		camera.look_at(camera_target)
+		return
+	if camera_mode==1:
+		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+		camera.fov = camera_fov
+		camera.near = .04
+		camera.position = player.position+Vector3(0,camera_height,0)
+		camera.rotation = Vector3(camera_pitch,yaw,0)
+		return
+	var target: Vector3 = player.position+Vector3(0,1 if camera_mode==2 else .1,0)
+	camera_target = camera_target.lerp(target,1-exp(-delta*7))
+	camera.projection = Camera3D.PROJECTION_PERSPECTIVE if camera_mode==2 else Camera3D.PROJECTION_ORTHOGONAL
+	camera.fov = camera_fov
+	camera.near = .1
+	camera.size = camera_zoom
+	var desired := camera_target+Vector3(0,camera_height,camera_distance).rotated(Vector3.UP,yaw)
+	if camera_mode==2:
+		var query := PhysicsRayQueryParameters3D.create(camera_target,desired,1,[player.get_rid()])
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty(): desired = hit.position+(camera_target-hit.position).normalized()*.25
+	camera.position = desired
 	camera.look_at(camera_target)
 
 func update_interaction() -> void:
@@ -251,9 +288,14 @@ func toast(text: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if input_blocked: return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP: camera.size = maxf(7,camera.size-1.5)
-		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: camera.size = minf(46,camera.size+1.5)
-	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE): yaw -= event.relative.x*.006
+		if event.button_index == MOUSE_BUTTON_LEFT and camera_mode==1: sync_camera_mouse()
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP: adjust_camera_zoom(-1)
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: adjust_camera_zoom(1)
+	if event is InputEventMouseMotion:
+		if camera_mode==1 and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+			yaw -= event.relative.x*camera_sensitivity
+			camera_pitch = clampf(camera_pitch-event.relative.y*camera_sensitivity,-1.35,1.35)
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE): yaw -= event.relative.x*.006
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_TAB:
@@ -310,3 +352,12 @@ func capture() -> void:
 		get_viewport().get_texture().get_image().save_png("res://captures/"+action+".png")
 		print("CAPTURE ",action)
 	get_tree().quit()
+
+func adjust_camera_zoom(direction: float) -> void:
+	if camera_mode==1: return
+	if camera_mode==2:
+		camera_distance = clampf(camera_distance+direction*.5,1,16)
+		menus.store_option("camera_distance",camera_distance)
+	else:
+		camera_zoom = clampf(camera_zoom+direction*1.5,7,60)
+		menus.store_option("camera_zoom",camera_zoom)

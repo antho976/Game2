@@ -60,3 +60,7 @@ Feeding now has a timed hand release and visible food trajectories. Well visits 
 Ducks use capsule bodies and separation steering, with individual head dips while feeding. Navigation leaves extra clearance around thin fences and chooses a reachable starting cell; the cleanup regression exercises the southeast garden fence and duck gathering.
 
 The player uses a separate `player_refined.glb`, built by `tools/player_model.py` through `tools/player_activities.py`: layered clothing, a defined face, boots and cuffs, a quiet breathing idle, and relaxed walking arms. NPC models remain unchanged for comparison. Run `./play.fish -- --player-visual` to capture the idle, walking pose, and cleared eastern garden.
+
+Options → Camera offers overhead, first-person, third-person, and far-overhead presets. Height, distance, visible area, perspective FOV, and first-person mouse sensitivity save automatically. Middle mouse rotates overhead/third-person views; the wheel zooms. First person captures the mouse, Esc releases it, and clicking the game restores capture after a focus change. Third-person camera rays pull the view forward at solid obstacles.
+
+Cat feeding now happens on open paving. Residents alternate one visible food throw with a short idle pause, instead of looping empty-handed feeding gestures.

@@ -6,7 +6,7 @@ var clock := 270.0
 var enabled := true
 var residents: Array[Dictionary] = []
 var reservations := {}
-var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-7.7,0,6.4),"cats":Vector3(3.5,0,7.2),"ducks":Vector3(-8.15,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
+var stations := {"water":Vector3(1.9,0,.3),"birds":Vector3(-7.7,0,6.4),"cats":Vector3(4.4,0,3.5),"ducks":Vector3(-8.15,0,8.25),"garden":Vector3(8.25,0,8.1),"talk_a":Vector3(-3.9,0,-5.2),"talk_b":Vector3(-2.6,0,-5.2)}
 var sun: DirectionalLight3D
 var environment: Environment
 var lamps: Array[OmniLight3D] = []
@@ -191,7 +191,12 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		var job: String = r.job
 		var action := "idle"
 		if job.begins_with("work_"): action = "hammer" if person.profession=="blacksmith" else "read"
-		elif job in ["birds","cats","ducks"] and person.profession=="villager": action = "feed"
+		elif job in ["birds","cats","ducks"] and person.profession=="villager":
+			var previous: float = r.get("feed_time",0.0)
+			r.feed_time = previous+delta
+			action = "feed" if fmod(r.feed_time,4.0)<1.3 else "idle"
+			if int(previous/4)<int(r.feed_time/4) and r.timer>1.3:
+				game.activities.throw_feed(person,feed_target(job))
 		elif job == "garden": action = "water"
 		elif job == "water": action = "draw_water" if person.profession=="villager" else "idle"
 		person.play(action)
@@ -239,7 +244,8 @@ func arrive(r: Dictionary,index: int) -> void:
 		r.next_water = elapsed+DAY_SECONDS
 		game.activities.draw_water(r.npc,r.prop)
 	if r.job in ["ducks","cats","birds"]:
-		game.activities.throw_feed(r.npc,stations[r.job]+Vector3(0,.06,1.2))
+		r.feed_time = 0.0
+		game.activities.throw_feed(r.npc,feed_target(r.job))
 	if r.job == "garden":
 		game.activities.watered = true
 		game.activities.water_particles()
@@ -253,3 +259,6 @@ func arrive(r: Dictionary,index: int) -> void:
 				animal.path = game.kit.life.route(animal.body.position,stations.birds+Vector3(.7,0,.9))
 				animal.state = "hopping"
 				animal.flight_due = 25
+
+func feed_target(job: String) -> Vector3:
+	return Vector3(-10.3,.12,8.7) if job=="ducks" else stations[job]+Vector3(0,.06,1.2)
