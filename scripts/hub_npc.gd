@@ -24,7 +24,7 @@ func _ready() -> void:
 	collision_mask = 3
 	var collider = CollisionShape3D.new()
 	var shape = CapsuleShape3D.new()
-	shape.radius = .25
+	shape.radius = .18 if profession=="blacksmith" else .25
 	shape.height = 1.8
 	collider.shape = shape
 	collider.position.y = .9
@@ -55,7 +55,7 @@ func _physics_process(delta: float) -> void:
 	velocity = Vector3(0,-2,0)
 	if profession == "blacksmith" and animation and current_clip.ends_with("_hammer"):
 		var at: float = animation.current_animation_position
-		if previous_time < .4 and at >= .4:
+		if previous_time < .8 and at >= .8:
 			work_struck.emit()
 		previous_time = at
 	if profession != "villager" or route.is_empty():

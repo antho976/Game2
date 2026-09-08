@@ -125,6 +125,7 @@ func button(value: String, callback: Callable, disabled := false) -> Button:
 func open() -> void:
 	active = true
 	game.input_blocked = true
+	game.sync_camera_mouse()
 	game.ui.hide()
 	root.show()
 
@@ -159,7 +160,7 @@ func resume() -> void:
 	game.ui.show()
 	game.input_blocked = false
 	game.overview = false
-	game.camera.size = 23
+	game.sync_camera_mouse()
 
 func request_new() -> void:
 	if FileAccess.file_exists(save_path): confirm.popup_centered(Vector2i(440,160))
@@ -210,6 +211,7 @@ func quit_game() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST: quit_game()
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _process(delta: float) -> void:
 	fps_clock += delta
@@ -253,6 +255,7 @@ func set_fullscreen(enabled: bool) -> void:
 	if is_instance_valid(display_choice): display_choice.select(1 if enabled else 0)
 
 func apply_settings() -> void:
+	apply_camera_settings()
 	AudioServer.set_bus_volume_db(0,linear_to_db(float(settings.get_value("options","volume",.8))))
 	Engine.max_fps = int(settings.get_value("options","fps",60))
 	get_viewport().scaling_3d_scale = float(settings.get_value("options","scale",.85))
@@ -261,7 +264,8 @@ func apply_settings() -> void:
 		if settings.get_value("options","fullscreen",false): set_fullscreen(true)
 
 func show_options() -> void:
-	clear("Options", "Display and sound")
+	clear("Options", "Display, camera and sound")
+	button("Camera",show_camera_options)
 	# Dedicated centered page, separate from the title / pause navigation.
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	panel.offset_left = -330
@@ -311,3 +315,59 @@ func show_options() -> void:
 		if home: show_home()
 		else: show_pause()
 	).grab_focus()
+
+func apply_camera_settings() -> void:
+	game.camera_mode = clampi(int(settings.get_value("options","camera_mode",0)),0,3)
+	game.camera_distance = clampf(float(settings.get_value("options","camera_distance",15)),1,40)
+	game.camera_height = clampf(float(settings.get_value("options","camera_height",19)),.8,45)
+	game.camera_zoom = clampf(float(settings.get_value("options","camera_zoom",23)),7,60)
+	game.camera_fov = clampf(float(settings.get_value("options","camera_fov",75)),50,105)
+	game.camera_sensitivity = clampf(float(settings.get_value("options","camera_sensitivity",.003)),.001,.008)
+
+func camera_preset(mode: int) -> void:
+	store_option("camera_mode",mode)
+	var presets := [[15,19,23],[1,1.65,23],[5,2.5,23],[25,32,43]]
+	store_option("camera_distance",presets[mode][0])
+	store_option("camera_height",presets[mode][1])
+	store_option("camera_zoom",presets[mode][2])
+	game.camera_pitch = 0
+	game.overview = false
+	apply_camera_settings()
+	game.sync_camera_mouse()
+
+func camera_slider(title: String,key: String,low: float,high: float,step: float) -> void:
+	var label := Label.new()
+	var slider := HSlider.new()
+	slider.min_value = low
+	slider.max_value = high
+	slider.step = step
+	slider.value = float(settings.get_value("options",key,game.get(key)))
+	label.text = title+"  ·  "+str(snappedf(slider.value,step))
+	box.add_child(label)
+	box.add_child(slider)
+	slider.value_changed.connect(func(value):
+		label.text = title+"  ·  "+str(snappedf(value,step))
+		store_option(key,value)
+		apply_camera_settings()
+	)
+
+func show_camera_options() -> void:
+	clear("Camera", "Changes apply immediately and save automatically.")
+	var mode := OptionButton.new()
+	for title in ["Overhead","First person","Third person","Far overhead"]: mode.add_item(title)
+	mode.select(game.camera_mode)
+	box.add_child(mode)
+	mode.item_selected.connect(func(index): camera_preset(index); show_camera_options())
+	if game.camera_mode==1:
+		camera_slider("Eye height","camera_height",1,2.1,.05)
+		camera_slider("Field of view","camera_fov",50,105,1)
+		camera_slider("Mouse sensitivity","camera_sensitivity",.001,.008,.0005)
+		text("Mouse to look. Esc releases the mouse and opens the menu.",15)
+	else:
+		camera_slider("Distance","camera_distance",1,16 if game.camera_mode==2 else 40,.5)
+		camera_slider("Height above target","camera_height",.8,10 if game.camera_mode==2 else 45,.1)
+		if game.camera_mode==2: camera_slider("Field of view","camera_fov",50,105,1)
+		else: camera_slider("Zoom / visible area","camera_zoom",7,60,.5)
+		text("Hold middle mouse to rotate. Mouse wheel adjusts zoom or third-person distance.",15)
+	button("Reset this camera",func(): camera_preset(game.camera_mode); show_camera_options())
+	button("Back",show_options)

@@ -111,3 +111,9 @@ author(rig)
 for ob in hero_parts+[rig]:ob.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(ROOT/'assets/village/player_refined.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS')
 print('REFINED PLAYER EXPORTED')
+
+bpy.ops.object.select_all(action='DESELECT')
+for ob in hero_parts:
+    if ob.name.startswith(('Sleeve','Cuff','Hand','Thumb')):ob.select_set(True)
+rig.select_set(True)
+bpy.ops.export_scene.gltf(filepath=str(ROOT/'assets/village/first_person_arms.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS')

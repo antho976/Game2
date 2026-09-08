@@ -113,7 +113,8 @@ func initialize_navigation() -> void:
 	navigation.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	navigation.update()
 	var query := PhysicsShapeQueryParameters3D.new()
-	var probe := SphereShape3D.new()
+	var probe := CapsuleShape3D.new()
+	probe.height = 1.8
 	probe.radius = .42 # Body clearance plus half a grid step catches thin fences between samples.
 	query.shape = probe
 	query.collision_mask = 5
@@ -125,7 +126,7 @@ func initialize_navigation() -> void:
 	for x in 75:
 		for z in 51:
 			var point := navigation.get_point_position(Vector2i(x,z))
-			query.transform = Transform3D(Basis.IDENTITY,Vector3(point.x,.43,point.y))
+			query.transform = Transform3D(Basis.IDENTITY,Vector3(point.x,.95,point.y))
 			navigation.set_point_solid(Vector2i(x,z),not space.intersect_shape(query,1).is_empty())
 	navigation_ready = true
 
@@ -340,6 +341,26 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 		a.tail.rotation.z = sin(elapsed*2+a.phase)*.25
 		a.model.position.y = sin(elapsed*3+a.phase)*.008
 	else:
+		var offered: bool = elapsed<a.get("food_until",0.0)
+		if offered and distance>.8 and a.state in ["feeding","hopping"]:
+			var goal: Vector3 = a.food_target
+			var toward := goal-body.position
+			toward.y = 0
+			if toward.length()>.22:
+				if a.timer<=0:
+					a.path = route(body.position,goal)
+					a.timer = 1.0
+				direction = follow_route(a) if toward.length()>.8 else toward.normalized()
+				speed = 1.0
+				a.state = "hopping"
+			else:
+				a.state = "feeding"
+				a.model.rotation.y = atan2(toward.x,toward.z)
+			body.velocity = direction*speed+Vector3(0,-2,0)
+			body.move_and_slide()
+			a.model.rotation.x = maxf(0,sin(elapsed*6+a.phase))*.6 if a.state=="feeding" else 0.0
+			if direction.length()>.01: a.model.rotation.y = lerp_angle(a.model.rotation.y,atan2(direction.x,direction.z),delta*8)
+			return
 		a.flight_due -= delta
 		if a.state in ["feeding","hopping"]:
 			if distance < 2.7 or a.flight_due <= 0:
@@ -405,3 +426,15 @@ func pet(animal: Dictionary) -> void:
 	animal.interest = 6.0
 	animal.attention_cooldown = 12.0
 	kit.world.game.play_sound("cat_purr",animal.body.position)
+
+func offer_bird_food(spots: Array[Vector3]) -> void:
+	var birds: Array[Dictionary] = []
+	for animal in animals:
+		if animal.kind=="bird" and animal.state in ["feeding","hopping"]: birds.append(animal)
+	birds.sort_custom(func(a,b): return a.body.position.distance_squared_to(spots[0])<b.body.position.distance_squared_to(spots[0]))
+	for i in mini(6,birds.size()):
+		var bird = birds[i]
+		bird.food_target = spots[i]
+		bird.food_until = elapsed+18
+		bird.timer = 0
+		bird.flight_due = 22

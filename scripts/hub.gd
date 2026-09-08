@@ -25,23 +25,13 @@ func build(target: HubWorld) -> void:
 	asset("townhouse",Vector3(4.6,0,-12.2),Vector3(4.2,4,4.2))
 	asset("townhouse",Vector3(-13.1,0,-6.8),Vector3(4.2,4,4.2))
 	asset("cottage",Vector3(13.5,0,-11.6),Vector3(4.8,4,4.1))
-	asset("smith_workshop",Vector3(-8,0,.2))
-	for x in [-10.5,-5.5]:
-		for z in [-1.3,1.7]: world.block(Vector3(x,1.5,z),Vector3(.25,3,.25))
-	asset("forge",Vector3(-9.2,0,-.6),Vector3(1.6,1.3,1))
+	preload("res://scripts/hub_workspaces.gd").new().build(self)
 	asset("anvil_station",Vector3(-7.4,0,3),Vector3(1.55,.95,.8))
-	var smith = npc("blacksmith",Vector3(-7.51,0,2.30))
+	var smith = npc("blacksmith",Vector3(-7.51,0,2.40))
 	smith.name = "WorkingBlacksmith"
 	smith.work_struck.connect(sparks)
 	smith.work_struck.connect(func(): world.game.play_sound("smith_hammer_anvil",smith.global_position,"smith",.1))
 	world.interactions.append({"id":"smith","pos":SMITH_POINT,"text":"Blacksmith · greatswords & armor"})
-	asset("research_pavilion",Vector3(10,0,-4))
-	for x in [7.75,12.25]:
-		for z in [-5.35,-2.65]: world.block(Vector3(x,1.5,z),Vector3(.22,3,.22))
-	asset("research_desk",Vector3(10,0,-1.8),Vector3(2.2,1,1.05))
-	asset("bookcase",Vector3(9,0,-4.9),Vector3(2.2,2.2,.55))
-	world.box(Vector3(12,.48,-2.2),Vector3(.85,.96,.85),world.stone[4],true)
-	asset("armillary",Vector3(12,.97,-2.2))
 	npc("scholar",Vector3(10,0,-2.5))
 	world.interactions.append({"id":"archive","pos":ARCHIVE_POINT,"text":"Research pavilion"})
 	var well = asset("village_well",WELL_POINT,Vector3(2.55,1.3,2.3))
@@ -109,7 +99,7 @@ func build(target: HubWorld) -> void:
 func on_path(p: Vector2) -> bool:
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
 	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25)
-	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -14.7 and p.y < 16
+	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -6.3 and p.y < 16
 	var work_lane: bool = absf(p.y-3.4) < 1.25 and absf(p.x) < 11
 	var research_lane: bool = p.distance_to(Vector2(10,-.8)) < 2.5 or (p.x > 5 and p.x < 11 and absf(p.y+1.0) < .9)
 	var home_lane: bool = absf(p.y+5.2) < 1.15 and absf(p.x) < 14.4
@@ -124,7 +114,7 @@ func on_path(p: Vector2) -> bool:
 	return (p.distance_to(Vector2(5.4,10.5)) < 1.7) or p.distance_to(Vector2(21.5,3.5)) < 3.2 or east_lane or dock_lane or west_door or research_lane or square or road or work_lane or home_lane or doorstep or yard or pond_walk or practice
 
 func build_ground() -> void:
-	var soil = world.rough_material(Color(.30,.36,.20))
+	var soil = preload("res://scripts/hub_surfaces.gd").ground()
 	world.box(Vector3(0,-.24,0),Vector3(110,.48,100),soil,true)
 	var palette: Array[StandardMaterial3D] = []
 	for color in [Color(.39,.37,.30),Color(.44,.42,.36),Color(.34,.35,.31),Color(.48,.43,.35),Color(.37,.39,.33),Color(.43,.39,.32),Color(.32,.34,.30),Color(.49,.47,.4)]:
@@ -231,7 +221,7 @@ func _process(delta: float) -> void:
 
 func sparks() -> void:
 	var particles = GPUParticles3D.new()
-	particles.position = Vector3(-7.4,1.09,3)
+	particles.position = Vector3(-7.54,1.06,2.86)
 	particles.amount = 10
 	particles.lifetime = .3
 	particles.one_shot = true
