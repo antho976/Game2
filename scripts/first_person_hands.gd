@@ -25,3 +25,21 @@ func _process(delta: float) -> void:
 			animation.play(clip,.15)
 			current = clip
 	position = Vector3(sin(clock*7)*.009,sin(clock*14)*.008,0)*minf(speed,1)
+
+func set_weapon(item: Dictionary) -> void:
+	var old := get_node_or_null("HeldGreatsword")
+	if old:
+		remove_child(old)
+		old.queue_free()
+	if item.is_empty(): return
+	var root := Node3D.new()
+	root.name = "HeldGreatsword"
+	add_child(root)
+	root.position = Vector3(.29,-.21,-.62)
+	root.rotation = Vector3(-.42,0,-.12)
+	root.scale = Vector3.ONE*.65
+	var builder := GearVisuals.new()
+	builder.steel = GearVisuals.material(Color(.43,.48,.50) if item.style==0 else Color(.16,.20,.23),.78)
+	builder.trim = GearVisuals.material(Color(.54,.40,.20),.72)
+	builder.leather = GearVisuals.material(Color(.10,.07,.045))
+	builder.sword(root,item.style)

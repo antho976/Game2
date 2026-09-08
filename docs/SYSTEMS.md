@@ -1,6 +1,6 @@
 # Systems direction
 
-Captured from the author's hub brief. These are design requirements for later work, not systems already implemented in the hub build.
+Captured from the author's hub brief. Blacksmith buying, equipping and upgrades are implemented; research and combat progression are still future work.
 
 - Greatswords are the only weapon category.
 - The blacksmith sells weapons and armor for gold dropped by enemies.
@@ -16,4 +16,6 @@ Research duration, online versus offline timing, queue rules, prices, stat formu
 
 ## This pass
 
-The author explicitly chose an unarmed hub character and shop locations only. No combat, spending, upgrades, research timers, or destructive item actions are implemented yet. More detailed resident jobs and schedules will be shaped after the hub review.
+The blacksmith sells three greatswords and two full plate sets split into helmet, chest, gloves and boots. Equipment changes the animated player. Gold and level gates apply, duplicate copies are allowed, and there is no selling or debug currency control. Each copy can upgrade independently for gold, with permanent destruction possible from the first attempt. Transactions persist immediately, including destruction, and roll back on save errors.
+
+Five ranks, the item prices and levels, survival chances (85/72/60/48/35 percent), 10 percent base-stat gains per rank and escalating gold cost are provisional test values. Future research will improve item survival and upgrade stat gains. Research comes next, then combat and actual gold/XP sources. The current shop allows free visual previews while the economy remains unavailable.

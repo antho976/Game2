@@ -33,9 +33,11 @@ var nearest_pos := Vector3.ZERO
 var muted := false
 var menus: CanvasLayer
 var village_day: Node
+var equipment: Node
+var smith_shop: CanvasLayer
 
 func _ready() -> void:
-	test_mode = "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -87,9 +89,16 @@ func _ready() -> void:
 	village_day.game = self
 	add_child(village_day)
 	village_day.build()
+	equipment = preload("res://scripts/equipment.gd").new()
+	equipment.game = self
+	add_child(equipment)
+	equipment.changed.connect(refresh_equipment)
 	menus = preload("res://scripts/menu.gd").new()
 	menus.game = self
 	add_child(menus)
+	smith_shop = preload("res://scripts/blacksmith_shop.gd").new()
+	smith_shop.game = self
+	add_child(smith_shop)
 	if not test_mode and not "--capture" in OS.get_cmdline_user_args(): menus.show_home()
 	play_ambient("amb_hub_air_01",-23)
 	play_ambient("music_hub_01",-25)
@@ -99,6 +108,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--shop-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/shop_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--refresh-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/refresh_test.gd").new()
 		add_child(suite)
@@ -277,11 +290,18 @@ func update_interaction() -> void:
 			text = "F  ·  "+point.text
 	if nearest.is_empty():
 		for service in world.interactions:
-			if player.position.distance_to(service.pos) < 2.8: text = service.text
+			if player.position.distance_to(service.pos) < 2.8:
+				text = service.text
+				if service.id=="smith":
+					nearest = "smith"
+					text = "F  ·  Blacksmith shop"
 	prompt.text = "Move to stand up" if player.activity == "sit" else (text if player.activity_time <= 0 else "")
 
 func interact() -> void:
 	if player.activity_time > 0 or player.activity == "sit": return
+	if nearest=="smith":
+		smith_shop.open()
+		return
 	if nearest.begins_with("cat:"):
 		for animal in kit.life.animals:
 			if str(animal.body.get_instance_id()) == nearest.get_slice(":",1):
@@ -373,3 +393,15 @@ func adjust_camera_zoom(direction: float) -> void:
 	else:
 		camera_zoom = clampf(camera_zoom+direction*1.5,7,60)
 		menus.store_option("camera_zoom",camera_zoom)
+
+func refresh_equipment() -> void:
+	if not is_instance_valid(player): return
+	var loadout := {}
+	for slot in equipment.equipped:
+		var entry: Dictionary = equipment.owned(equipment.equipped[slot])
+		if not entry.is_empty(): loadout[slot] = GearCatalog.find(entry.id)
+	GearVisuals.apply(player.model,loadout)
+	var hands = camera.get_node_or_null("FirstPersonHands") if is_instance_valid(camera) else null
+	if hands!=null and is_instance_valid(hands.arms):
+		GearVisuals.apply(hands.arms,{"gloves":loadout.gloves} if loadout.has("gloves") else {})
+		hands.set_weapon(loadout.get("weapon",{}))

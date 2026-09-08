@@ -177,6 +177,7 @@ func reset_player(pos: Vector3) -> void:
 	game.camera_target = pos
 
 func new_game() -> void:
+	game.equipment.restore({})
 	reset_player(Vector3(0,.1,8.5))
 	game.activities.watered = false
 	game.village_day.clock = 270.0
@@ -191,19 +192,23 @@ func continue_game() -> void:
 	var pos: Vector3 = data.get_value("hub","position",Vector3(0,.1,8.5))
 	if not pos.is_finite() or (pos.x < -19 or pos.x > 26) or absf(pos.z)>24 or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
 	reset_player(pos)
+	game.equipment.restore(data.get_value("equipment","state",{}))
 	game.activities.watered = data.get_value("hub","watered",false)
 	game.village_day.clock = float(data.get_value("hub","clock",270.0))
 	resume()
 
-func save_game() -> void:
-	if not started: return
+func save_game() -> Error:
+	if not started: return ERR_UNAVAILABLE
 	var data := ConfigFile.new()
 	var pos: Vector3 = game.player.seat_exit if game.player.activity == "sit" else game.player.last_safe
 	data.set_value("hub","position",pos)
 	data.set_value("hub","watered",game.activities.watered)
 	data.set_value("hub","clock",game.village_day.clock)
-	var error := data.save(save_path)
+	data.set_value("equipment","state",game.equipment.snapshot())
+	var error := data.save(save_path+".tmp")
+	if error==OK: error = DirAccess.rename_absolute(save_path+".tmp",save_path)
 	if error != OK: game.toast("Could not save this visit.")
+	return error
 
 func quit_game() -> void:
 	save_game()
@@ -230,6 +235,7 @@ func _input(event: InputEvent) -> void:
 			set_fullscreen(DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_ESCAPE:
+			if is_instance_valid(game.smith_shop) and game.smith_shop.active: return
 			if confirm.visible: confirm.hide()
 			elif active:
 				if home: show_home()
