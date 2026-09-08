@@ -109,7 +109,7 @@ func build(target: HubWorld) -> void:
 func on_path(p: Vector2) -> bool:
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
 	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25)
-	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -14.7 and p.y < 16
+	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -6.3 and p.y < 16
 	var work_lane: bool = absf(p.y-3.4) < 1.25 and absf(p.x) < 11
 	var research_lane: bool = p.distance_to(Vector2(10,-.8)) < 2.5 or (p.x > 5 and p.x < 11 and absf(p.y+1.0) < .9)
 	var home_lane: bool = absf(p.y+5.2) < 1.15 and absf(p.x) < 14.4

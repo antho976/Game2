@@ -531,11 +531,6 @@ void fragment() {
 		var p := ruin+Vector3(rng.randf_range(-3.6,3.6),0,rng.randf_range(-3.2,3.2))
 		p.y = terrain_height(p)+.18
 		shape(self,p,Vector3(.52,.32,.40),Color(.39,.41,.33)).rotation.y = rng.randf()*TAU
-	# The road continues beyond the gate toward a weathered marker, then disappears.
-	for z in range(-42,-16):
-		for side in [-1,0,1]:
-			var p := Vector3(side*.72+sin(z*.16)*.12,.02,z)
-			kit.world.box(p,Vector3(.65,.07,.85),kit.world.stone[(z+42)%6])
 	for x in [-1.8,1.8]:
 		for y in 5:
 			kit.world.box(Vector3(x,.3+y*.52,-28),Vector3(.7,.5,.75),kit.world.stone[y])
