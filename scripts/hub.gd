@@ -88,8 +88,8 @@ func build(target: HubWorld) -> void:
 	build_boundaries()
 	var keeper = npc("villager",Vector3(18.7,0,-6.5))
 	keeper.name = "Gatekeeper"
-	world.interactions.append({"id":"enter","pos":Vector3(21,0,-6.0),"text":"The village portal"})
-	build_gateway()
+
+
 	setup_forge()
 	landscape = preload("res://scripts/hub_landscape.gd").new()
 	landscape.name = "Landscape"
@@ -108,7 +108,7 @@ func build(target: HubWorld) -> void:
 
 func on_path(p: Vector2) -> bool:
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
-	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25) or (absf(p.x-21)<1.5 and p.y>-8.5 and p.y<4) or p.distance_to(Vector2(21,-6.5))<3.4
+	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25)
 	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -14.7 and p.y < 16
 	var work_lane: bool = absf(p.y-3.4) < 1.25 and absf(p.x) < 11
 	var research_lane: bool = p.distance_to(Vector2(10,-.8)) < 2.5 or (p.x > 5 and p.x < 11 and absf(p.y+1.0) < .9)
@@ -254,13 +254,6 @@ func sparks() -> void:
 	particles.draw_pass_1 = sphere
 	add_child(particles)
 	particles.finished.connect(particles.queue_free)
-
-func build_gateway() -> void:
-	var portal := preload("res://scripts/village_portal.gd").new()
-	portal.position = Vector3(21,0,-8.5)
-	portal.kit = self
-	add_child(portal)
-	for x in [19.05,22.95]: world.block(Vector3(x,1.5,-8.5),Vector3(.85,3,.85))
 
 func build_boundaries() -> void:
 	# Continuous masonry base, overlapping coping, and planted buttresses close corners.

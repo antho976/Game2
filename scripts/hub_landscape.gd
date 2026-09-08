@@ -18,7 +18,7 @@ func build(hub: HubKit) -> void:
 	var planting := [Vector3(-16,0,-12),Vector3(-10,0,-13.8),Vector3(-17,0,-3),
 		Vector3(-16.8,0,2.7),Vector3(-16.8,0,5.7),Vector3(-10.2,0,14.6),
 		Vector3(-4.3,0,13.8),Vector3(17.8,0,14.0),Vector3(20.2,0,12.2),
-		Vector3(28.5,0,6),Vector3(28.7,0,-.7),Vector3(15.9,0,-13.6),
+		Vector3(28.5,0,6),Vector3(28.7,0,-.7),Vector3(20.5,0,-13.6),
 		Vector3(9.7,0,-14.4),Vector3(3.1,0,12.7),Vector3(-17.4,0,11.5)]
 	for i in planting.size():
 		plant_tree(planting[i],rng.randf_range(.7,1.14),i)

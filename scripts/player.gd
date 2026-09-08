@@ -21,7 +21,7 @@ func _ready() -> void:
 	collider.shape = shape
 	collider.position.y = .84
 	add_child(collider)
-	model = load("res://assets/village/hub_player.glb").instantiate()
+	model = load("res://assets/village/player_refined.glb").instantiate()
 	model.scale = Vector3.ONE*.97
 	add_child(model)
 	animation = model.find_children("*","AnimationPlayer",true,false)[0]

@@ -51,10 +51,12 @@ The runtime checks cover movement, interaction selection, imported animation cli
 
 Native three-minute stability and pond traversal check: `./play.fish -- --polish-test`. This exercises movement, repeated fullscreen transitions, seating, bank access, and frame delivery using isolated test save files.
 
-The expanded eastern court contains a reactive training dummy and a stone portal with an animated veil. Portal destinations and weapon combat are still outside this hub prototype. The garden is maintained by residents rather than a required player chore.
+The expanded eastern court contains a reactive training dummy. The temporary portal and its approach path have been removed while the next layout is planned. Weapon combat remains outside this hub prototype. The garden is maintained by residents rather than a required player chore.
 
 Routine simulation: `./play.fish --headless --fixed-fps 60 -- --routine-test`. Day/night visual captures: `./play.fish -- --village-capture`.
 
 Feeding now has a timed hand release and visible food trajectories. Well visits have a shared two-minute cooldown and a once-per-day limit per resident, with a bucket-lowering and hauling animation. Small props, lamp posts and garden fences have traversal collision. Interaction checks: `./play.fish --headless --fixed-fps 60 -- --cleanup-test`.
 
 Ducks use capsule bodies and separation steering, with individual head dips while feeding. Navigation leaves extra clearance around thin fences and chooses a reachable starting cell; the cleanup regression exercises the southeast garden fence and duck gathering.
+
+The player uses a separate `player_refined.glb`, built by `tools/player_model.py` through `tools/player_activities.py`: layered clothing, a defined face, boots and cuffs, a quiet breathing idle, and relaxed walking arms. NPC models remain unchanged for comparison. Run `./play.fish -- --player-visual` to capture the idle, walking pose, and cleared eastern garden.

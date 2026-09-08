@@ -61,7 +61,6 @@ func build() -> void:
 	can = asset("watering_can",Vector3(8.4,.05,8.3))
 	game.world.block(Vector3(8.4,.22,8.3),Vector3(.4,.44,.4))
 
-	points.append({"id":"portal","pos":Vector3(21,0,-6.0),"radius":2.1,"text":"Listen to the portal"})
 	points.append({"id":"dummy","pos":Vector3(21.5,0,4.2),"radius":1.8,"text":"Test the training dummy"})
 	points.append({"id":"sit","pos":Vector3(5.4,0,10.1),"radius":1.7,"text":"Sit for a moment"})
 	bell = asset("village_bell",Vector3(3.3,0,-10.5))
@@ -172,8 +171,6 @@ func _physics_process(delta: float) -> void:
 
 func interact(id: String) -> void:
 	match id:
-		"portal":
-			game.toast("The passage is awake. Its destination is still beyond this prototype.")
 		"dummy":
 			game.kit.practice_dummy.strike()
 			game.toast("Ready for greatsword practice, once you have a blade.")

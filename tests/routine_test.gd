@@ -34,7 +34,7 @@ func run(game: Node) -> void:
 	day.clock = 8*30
 	for frame in 900: await get_tree().physics_frame
 	for r in day.residents: check(r.npc.visible and r.npc.collision_layer==1,"Resident returns in morning: "+str(r.npc.name))
-	check(game.kit.find_children("VillagePortal","Node3D",true,false).size()==1,"Portal exists in eastern courtyard")
+	check(game.kit.find_children("VillagePortal","Node3D",true,false).is_empty(),"Removed portal is absent from eastern courtyard")
 	check(game.kit.practice_dummy != null,"Training dummy occupies separate practice ground")
 	print("ROUTINE CHECKS COMPLETE: ",failures," failure(s)")
 	get_tree().quit(1 if failures else 0)
