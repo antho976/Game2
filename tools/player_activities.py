@@ -100,40 +100,14 @@ print('PLAYER ACTIVITY ANIMATIONS EXPORTED')
 import sys
 sys.path.insert(0,str(ROOT/'tools'))
 from player_model import build
+from hero_animation import extend_rig, author
 for ob in objects:
     ob.select_set(False)
+# The player rig gains a neck and shoulders; every villager bone keeps its name and rest pose.
+extend_rig(rig)
 hero_parts=build(rig)
-# A quiet breathing idle without the broad toy-like sway of the source clip.
-old=bpy.data.actions.get('villager_idle')
-for track in list(rig.animation_data.nla_tracks):
-    if track.name=='villager_idle':rig.animation_data.nla_tracks.remove(track)
-idle=bpy.data.actions.new('hero_idle')
-rig.animation_data.action=idle
-for frame in range(1,122,5):
-    t=(frame-1)/120*math.tau
-    for bone in rig.pose.bones:
-        bone.rotation_euler=(0,0,0);bone.location=(0,0,0)
-    rig.pose.bones['Chest'].rotation_euler.x=.012*math.sin(t)
-    rig.pose.bones['Head'].rotation_euler.z=.012*math.sin(t)
-    for side in ['L','R']:rig.pose.bones['Forearm.'+side].rotation_euler.x=-.10
-    for bone in rig.pose.bones:
-        bone.keyframe_insert(data_path='rotation_euler',frame=frame)
-        bone.keyframe_insert(data_path='location',frame=frame)
-rig.animation_data.action=None
-track=rig.animation_data.nla_tracks.new();track.name='villager_idle';track.strips.new('villager_idle',0,idle)
-hero_walk=bpy.data.actions.get('villager_walk').copy();hero_walk.name='hero_walk'
-for track in list(rig.animation_data.nla_tracks):
-    if track.name=='villager_walk':rig.animation_data.nla_tracks.remove(track)
-rig.animation_data.action=hero_walk
-for frame in range(1,26):
-    t=(frame-1)/24*math.tau
-    for side,phase in [('L',0),('R',math.pi)]:
-        arm=rig.pose.bones['UpperArm.'+side];arm.rotation_euler=(.19*math.cos(t+phase),0,0)
-        elbow=rig.pose.bones['Forearm.'+side];elbow.rotation_euler=(-.22-.055*math.cos(t+phase),0,0)
-        arm.keyframe_insert(data_path='rotation_euler',frame=frame)
-        elbow.keyframe_insert(data_path='rotation_euler',frame=frame)
-rig.animation_data.action=None
-track=rig.animation_data.nla_tracks.new();track.name='villager_walk';track.strips.new('villager_walk',0,hero_walk)
+# Warrior idle, walk and run replace the villager locomotion tracks for this export only.
+author(rig)
 for ob in hero_parts+[rig]:ob.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(ROOT/'assets/village/player_refined.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS')
 print('REFINED PLAYER EXPORTED')

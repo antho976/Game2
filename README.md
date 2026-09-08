@@ -12,7 +12,7 @@ Or import `project.godot` into Godot 4.7 and press F5. The launcher imports asse
 
 ## Controls
 
-- WASD/arrows: walk; Shift: jog.
+- WASD/arrows: walk; Shift: run.
 - F: interact with the nearest animal or activity.
 - Mouse wheel: zoom. Middle mouse drag: rotate the elevated camera.
 - Tab: village overview. H: hide interface. M: mute audio.
@@ -59,6 +59,7 @@ Feeding now has a timed hand release and visible food trajectories. Well visits 
 
 Ducks use capsule bodies and separation steering, with individual head dips while feeding. Navigation leaves extra clearance around thin fences and chooses a reachable starting cell; the cleanup regression exercises the southeast garden fence and duck gathering.
 
+The player uses a separate `player_refined.glb`, built by `tools/player_model.py` through `tools/player_activities.py`: layered clothing, a defined face, boots and cuffs. NPC models remain unchanged for comparison. The player's locomotion comes from `tools/hero_animation.py`, which adds neck and shoulder bones on top of the villager skeleton (the shared activity clips still play) and authors the clips procedurally: a grounded ready idle with breathing, weight shifts and a slow scan; a planted walk with heel strike, toe-off, pelvis twist and counter-rotating shoulders; and a run with a flight phase and pumping arms. Playback speed is matched to ground speed so the feet do not slide, and the model leans into speed and banks into turns. Run `./play.fish -- --player-visual` to capture the idle, walking pose, and cleared eastern garden.
 The player uses a separate `player_refined.glb`, built by `tools/player_model.py` through `tools/player_activities.py`: layered clothing, a defined face, boots and cuffs, a quiet breathing idle, and relaxed walking arms. NPC models remain unchanged for comparison. Run `./play.fish -- --player-visual` to capture the idle, walking pose, and cleared eastern garden.
 
 Options → Camera offers overhead, first-person, third-person, and far-overhead presets. Height, distance, visible area, perspective FOV, and first-person mouse sensitivity save automatically. Middle mouse rotates overhead/third-person views; the wheel zooms. First person captures the mouse, Esc releases it, and clicking the game restores capture after a focus change. Third-person camera rays pull the view forward at solid obstacles.
