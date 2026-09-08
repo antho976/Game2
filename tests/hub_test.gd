@@ -13,7 +13,7 @@ func run(game: Node) -> void:
 	await frames(30)
 	check(game.player.is_on_floor(),"Unarmed player stands on the hub floor")
 	check(game.player.find_children("*sword*","Node",true,false).is_empty(),"No weapon attached to the hub character")
-	for action in ["idle","walk","pet","feed","water","sit"]:
+	for action in ["idle","walk","run","pet","feed","water","sit"]:
 		var found := false
 		for clip in game.player.animation.get_animation_list():
 			if clip.ends_with("_"+action): found = true

@@ -8,6 +8,13 @@ var activity_time := 0.0
 var facing := 0.0
 var last_safe := Vector3(0,.1,8)
 var seat_exit := Vector3.ZERO
+var lean := 0.0
+var bank := 0.0
+var previous_yaw := 0.0
+# Ground speed of each authored cycle at speed scale 1, from tools/hero_animation.py.
+const WALK_GROUND_SPEED := 1.625
+const RUN_GROUND_SPEED := 3.97
+const RUN_THRESHOLD := 3.3
 
 func _ready() -> void:
 	name = "UnarmedPlayer"
@@ -37,12 +44,17 @@ func _ready() -> void:
 				mesh.set_surface_override_material(surface,mat)
 	play("idle")
 
-func play(action: String) -> void:
+func play(action: String, blend: float = .18) -> void:
 	for clip in animation.get_animation_list():
 		if clip.ends_with("villager_"+action) and current != clip:
 			current = clip
-			animation.play(clip,.18)
+			animation.play(clip,blend)
 			return
+
+func has_clip(action: String) -> bool:
+	for clip in animation.get_animation_list():
+		if clip.ends_with("villager_"+action): return true
+	return false
 
 func _physics_process(delta: float) -> void:
 	var input := Input.get_vector("left","right","up","down")
@@ -67,12 +79,30 @@ func _physics_process(delta: float) -> void:
 	else: velocity = Vector3.ZERO
 	if direction.length() > .1: facing = atan2(direction.x,direction.z)
 	model.rotation.y = lerp_angle(model.rotation.y,facing,minf(delta*10,1))
+	var planar := Vector2(velocity.x,velocity.z).length()
+	var target_lean := 0.0
 	if not activity.is_empty():
 		play(activity)
 		animation.speed_scale = 1.0
+	elif planar < .1:
+		play("idle",.25)
+		animation.speed_scale = 1.0
+	elif planar > RUN_THRESHOLD and has_clip("run"):
+		# Match stride to ground speed so the feet stay planted.
+		play("run",.22)
+		animation.speed_scale = clampf(planar/RUN_GROUND_SPEED,.6,1.6)
+		target_lean = .07
 	else:
-		play("walk" if Vector2(velocity.x,velocity.z).length()>.1 else "idle")
-		animation.speed_scale = clampf(Vector2(velocity.x,velocity.z).length()/1.5,.35,2.5) if current.ends_with("_walk") else 1.0
+		play("walk",.18)
+		animation.speed_scale = clampf(planar/WALK_GROUND_SPEED,.35,2.2)
+		target_lean = .015
+	# Lean into speed and bank into turns so direction changes carry weight.
+	var yaw_rate := wrapf(model.rotation.y-previous_yaw,-PI,PI)/maxf(delta,.001)
+	previous_yaw = model.rotation.y
+	lean = lerpf(lean,target_lean,minf(delta*6,1))
+	bank = lerpf(bank,clampf(-yaw_rate*.028,-.11,.11)*clampf(planar/2.4,0,1),minf(delta*8,1))
+	model.rotation.x = lean
+	model.rotation.z = bank
 	if is_on_floor(): last_safe = position
 	if position.y < -3: position = last_safe+Vector3.UP
 
