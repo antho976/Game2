@@ -23,9 +23,9 @@ WALK = dict(frames=24, front=.36, back=.42, stance=.60, lift=.10, crouch=.012, b
             hips_pitch=.02, lean=.05, chest_bob=.012, head_bob=.012, shoulder_twist=.09, stance_width=.03,
             arm_rest=.04, arm_swing=.34, arm_back_bias=.1, arm_out=.11, elbow=.40, elbow_var=.22,
             shrug=0.0, shoulder_back=.05, hand=-.12, lift_peak=.85)
-RUN = dict(frames=20, front=.34, back=.56, stance=.34, lift=.30, crouch=.025, bob=.035, bob_phase=.45,
+RUN = dict(frames=20, front=.36, back=.62, stance=.32, lift=.32, crouch=.025, bob=.038, bob_phase=.45,
            land_lift=.03, land_flex=0.0, heel=.09, plant=.12, toeoff=.50, sway=.012, twist=.12, roll=.04,
-           hips_pitch=.10, lean=.16, chest_bob=.02, head_bob=.015, shoulder_twist=.16, stance_width=.02,
+           hips_pitch=.11, lean=.18, chest_bob=.02, head_bob=.015, shoulder_twist=.17, stance_width=.02,
            arm_rest=-.05, arm_swing=.75, arm_back_bias=.05, arm_out=.10, elbow=1.25, elbow_var=.45,
            shrug=.04, shoulder_back=.02, hand=-.35, lift_peak=.6)
 

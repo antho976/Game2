@@ -12,7 +12,7 @@ Or import `project.godot` into Godot 4.7 and press F5. The launcher imports asse
 
 ## Controls
 
-- WASD/arrows: walk; Shift: jog.
+- WASD/arrows: walk; Shift: run.
 - F: interact with the nearest animal or activity.
 - Mouse wheel: zoom. Middle mouse drag: rotate the elevated camera.
 - Tab: village overview. H: hide interface. M: mute audio.

@@ -13,7 +13,7 @@ var bank := 0.0
 var previous_yaw := 0.0
 # Ground speed of each authored cycle at speed scale 1, from tools/hero_animation.py.
 const WALK_GROUND_SPEED := 1.625
-const RUN_GROUND_SPEED := 3.97
+const RUN_GROUND_SPEED := 4.59
 const RUN_THRESHOLD := 3.3
 
 func _ready() -> void:
@@ -70,7 +70,7 @@ func _physics_process(delta: float) -> void:
 			collision_mask = 1
 		else: input = Vector2.ZERO
 	var direction := Vector3(input.x,0,input.y).rotated(Vector3.UP,game.yaw)
-	var speed := 4.4 if Input.is_action_pressed("run") else 2.4
+	var speed := 5.6 if Input.is_action_pressed("run") else 2.0
 	velocity.x = move_toward(velocity.x,direction.x*speed,delta*24)
 	velocity.z = move_toward(velocity.z,direction.z*speed,delta*24)
 	if activity != "sit":
@@ -90,7 +90,7 @@ func _physics_process(delta: float) -> void:
 	elif planar > RUN_THRESHOLD and has_clip("run"):
 		# Match stride to ground speed so the feet stay planted.
 		play("run",.22)
-		animation.speed_scale = clampf(planar/RUN_GROUND_SPEED,.6,1.6)
+		animation.speed_scale = clampf(planar/RUN_GROUND_SPEED,.6,1.7)
 		target_lean = .07
 	else:
 		play("walk",.18)
@@ -100,7 +100,7 @@ func _physics_process(delta: float) -> void:
 	var yaw_rate := wrapf(model.rotation.y-previous_yaw,-PI,PI)/maxf(delta,.001)
 	previous_yaw = model.rotation.y
 	lean = lerpf(lean,target_lean,minf(delta*6,1))
-	bank = lerpf(bank,clampf(-yaw_rate*.028,-.11,.11)*clampf(planar/2.4,0,1),minf(delta*8,1))
+	bank = lerpf(bank,clampf(-yaw_rate*.028,-.11,.11)*clampf(planar/2.0,0,1),minf(delta*8,1))
 	model.rotation.x = lean
 	model.rotation.z = bank
 	if is_on_floor(): last_safe = position

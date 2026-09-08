@@ -22,7 +22,7 @@ func run(game: Node) -> void:
 	var start: Vector3 = game.player.position
 	game.player.position = Vector3(-13.7,.1,6.0)
 	Input.action_press("up")
-	await frames(270)
+	await frames(330)
 	Input.action_release("up")
 	check(game.player.position.z < -3.8,"Pond bench leaves the western house lane open")
 	game.player.position = start
