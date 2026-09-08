@@ -20,9 +20,10 @@ var ambient: Array[AudioStreamPlayer] = []
 var nearest := ""
 var nearest_pos := Vector3.ZERO
 var muted := false
+var menus: CanvasLayer
 
 func _ready() -> void:
-	test_mode = "--self-test" in OS.get_cmdline_user_args()
+	test_mode = "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -64,11 +65,22 @@ func _ready() -> void:
 	add_child(camera)
 	update_camera(1.0)
 	build_ui()
+	menus = preload("res://scripts/menu.gd").new()
+	menus.game = self
+	add_child(menus)
+	if not test_mode and not "--capture" in OS.get_cmdline_user_args(): menus.show_home()
 	play_ambient("amb_hub_air_01",-23)
 	play_ambient("music_hub_01",-25)
 	spatial_loop("amb_pond_01",Vector3(-12,.5,8.7),-17,12)
 	spatial_loop("amb_forge_01",Vector3(-9,1,0),-18,9)
 	if "--capture" in OS.get_cmdline_user_args(): capture()
+	if "--runtime-probe" in OS.get_cmdline_user_args():
+		var probe := preload("res://tests/runtime_probe.gd").new()
+		add_child(probe)
+	if "--menu-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/menu_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--self-test" in OS.get_cmdline_user_args():
 		test_mode = true
 		var suite = load("res://tests/hub_test.gd").new()
@@ -137,27 +149,38 @@ func build_ui() -> void:
 	add_child(ui)
 	title = label("THE VILLAGE",16,Color(.95,.91,.78),Vector2(30,25))
 	label("A quiet place to return to",13,Color(.83,.85,.79),Vector2(30,49))
-	var controls := label("WASD  walk   ·   SHIFT  jog   ·   F  interact   ·   Wheel  zoom   ·   Middle drag  rotate   ·   TAB  overview",14,Color(.94,.91,.83),Vector2(0,861))
+	var controls := label("WASD  walk   ·   SHIFT  jog   ·   F  interact   ·   Wheel  zoom   ·   Middle drag  rotate   ·   TAB  overview",14,Color(.94,.91,.83),Vector2.ZERO)
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls.size.x = 1440
-	prompt = label("",20,Color(1,.96,.82),Vector2(0,806))
+	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	controls.offset_top = -40
+	controls.offset_bottom = -12
+	controls.text += "   ·   ESC  menu"
+	prompt = label("",20,Color(1,.96,.82),Vector2.ZERO)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt.size.x = 1440
+	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	prompt.offset_top = -95
+	prompt.offset_bottom = -60
 	notice = label("",17,Color(.94,.91,.80),Vector2(0,90))
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	notice.size.x = 1440
+	notice.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	notice.offset_top = 90
+	notice.offset_bottom = 120
 
 func _process(delta: float) -> void:
 	elapsed += delta
 	update_camera(delta)
 	notice_time = maxf(0,notice_time-delta)
 	notice.modulate.a = minf(notice_time,1)
+	if input_blocked: return
 	update_interaction()
 	if Input.is_action_just_pressed("interact") and not input_blocked:
 		interact()
 
 func update_camera(delta: float) -> void:
-	var target: Vector3 = Vector3(0,0,-.5) if overview else player.position
+	if menus != null and menus.home:
+		yaw += delta * .055
+		camera.size = 43
+	var target: Vector3 = Vector3(0,0,-.5) if overview or (menus != null and menus.home) else player.position
 	target.y = .1
 	camera_target = camera_target.lerp(target,1.0-exp(-delta*7.0))
 	camera.position = camera_target+Vector3(0,19,15).rotated(Vector3.UP,yaw)
@@ -205,6 +228,7 @@ func toast(text: String) -> void:
 	notice_time = 3.5
 
 func _unhandled_input(event: InputEvent) -> void:
+	if input_blocked: return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: camera.size = maxf(7,camera.size-1.5)
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: camera.size = minf(46,camera.size+1.5)
@@ -224,9 +248,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				player.collision_mask = 1
 				player.velocity = Vector3.ZERO
 				player.position = Vector3(0,.1,8.5)
-			KEY_F11:
-				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
-			KEY_ESCAPE: get_tree().quit()
 
 func capture() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://captures"))
