@@ -156,6 +156,26 @@ func run(game: Node) -> void:
 	c.foe.timer=.3
 	c.resolve_hit(true)
 	check(c.foe.phase=="hurt","A heavy hit stops any swing")
+	check(c.foe.timer>.4 and c.foe.get("staggered",false) and c.foe.knock.length()>3 and c.hitstop>=.14,"A heavy hit staggers: a longer reel, a harder knockback and a longer freeze")
+	c.hitstop=0
+	c.hero.phase="idle"
+	c.hero.knock=Vector3(0,0,2)
+	check(c.movement(Vector3.ZERO,2)==Vector3(0,0,2),"The player is knocked back through their own movement")
+	c.hero.knock=Vector3.ZERO
+	c.hero.phase="windup"
+	c.hero.heavy=false
+	c.hero.total=1.0
+	c.hero.timer=.2
+	check(c.movement(Vector3.ZERO,2).length()>2,"A committed swing lunges toward the swordsman")
+	c.hero.phase="idle"
+	c.hero.blocking=false
+	c.foe.phase="windup"
+	c.foe.attack_dir=2
+	c.foe.heavy=false
+	check(c.resolve_hit(false)=="hit" and c.hit_lane==2 and c.hit_flash>0 and c.hero.phase=="hurt","A hit taken flags its lane for the reticle and screen-edge flash")
+	c.hitstop=0
+	c.hero.phase="idle"
+	c.hero.heavy=true
 	c.foe.phase="idle"
 	c.foe.blocking=true
 	c.foe.guard=0
