@@ -1,6 +1,7 @@
 extends SkeletonModifier3D
 # Two-bone arm reach keeps both hands on the moving greatsword grip.
 var sword: Node3D
+var reach_error := 0.0 # Distance left between the leading hand and its grip point after the last solve.
 func _process_modification() -> void:
 	if not is_instance_valid(sword) or not sword.is_visible_in_tree(): return
 	var rig := get_skeleton()
@@ -25,6 +26,7 @@ func _process_modification() -> void:
 		var pose := rig.get_bone_global_pose(hand)
 		pose.basis = rig.global_basis.inverse()*sword.global_basis
 		rig.set_bone_global_pose(hand,pose)
+		if side=="R": reach_error=pose.origin.distance_to(target)
 func point_bone(rig: Skeleton3D,index: int,origin: Vector3,target: Vector3) -> void:
 	var pose := rig.get_bone_global_pose(index)
 	pose.basis = Basis(Quaternion(pose.basis.y.normalized(),(target-origin).normalized()))*pose.basis

@@ -97,6 +97,115 @@ func run(game: Node) -> void:
 	c.hero.counter=1.0
 	c.hero.guard=0
 	check(c.attack(false) and not c.hero.critical,"Wrong directional counter remains an ordinary attack")
+	# Feints, pulls, clashes, interrupts, chip damage, forms and input buffering.
+	c.hero.phase="idle"
+	c.hero.counter=0
+	c.hero.stamina=100
+	c.hero.guard=0
+	check(c.attack(false),"Attack begins from the selected lane")
+	var total: float=c.hero.total
+	c.hero.timer=total*.8
+	var before: float=c.hero.stamina
+	c.set_guard(1)
+	check(c.hero.attack_dir==1 and c.hero.feinted and c.hero.stamina==before-6 and is_equal_approx(c.hero.timer,total*.55),"Changing lane early in a swing feints into the new lane")
+	c.set_guard(2)
+	check(c.hero.attack_dir==1,"A swing can only feint once")
+	c.hero.phase="idle"
+	c.hero.guard=0
+	c.attack(false)
+	c.hero.timer=c.hero.total*.3
+	c.set_guard(3)
+	check(c.hero.attack_dir==0,"A committed swing cannot change lane")
+	c.hero.phase="idle"
+	c.attack(false)
+	c.hero.timer=c.hero.total*.9
+	before=c.hero.stamina
+	c.block(true)
+	check(c.hero.phase=="idle" and c.hero.blocking and c.hero.block_age>1 and c.hero.stamina==before-4,"Guarding early in a swing pulls the blow without a perfect window")
+	c.block(false)
+	c.hero.phase="windup"
+	c.hero.attack_dir=1
+	c.hero.heavy=false
+	c.hero.critical=false
+	c.hero.combo=""
+	c.foe.phase="windup"
+	c.foe.attack_dir=1
+	c.foe.total=1.0
+	c.foe.timer=.3
+	c.foe.blocking=false
+	health=c.foe.health
+	check(c.resolve_hit(true)=="clash" and c.foe.phase=="recovery" and c.hero.phase=="recovery" and c.foe.health==health,"Two committed swings in one lane bind without damage")
+	check(c.hitstop>0 and c.movement(Vector3.FORWARD,2)==Vector3.ZERO,"Impacts freeze the frame briefly")
+	c.hitstop=0
+	c.hero.phase="windup"
+	c.hero.attack_dir=0
+	c.foe.phase="windup"
+	c.foe.attack_dir=2
+	c.foe.timer=.9
+	c.resolve_hit(true)
+	check(c.foe.phase=="hurt","A hit stops an early swing")
+	c.hero.phase="windup"
+	c.foe.phase="windup"
+	c.foe.total=1.0
+	c.foe.timer=.3
+	c.resolve_hit(true)
+	check(c.foe.phase=="windup","A light hit does not stop a committed swing")
+	c.hero.phase="windup"
+	c.hero.heavy=true
+	c.foe.total=1.0
+	c.foe.timer=.3
+	c.resolve_hit(true)
+	check(c.foe.phase=="hurt","A heavy hit stops any swing")
+	c.foe.phase="idle"
+	c.foe.blocking=true
+	c.foe.guard=0
+	c.foe.block_age=99
+	c.foe.exhaust=0
+	c.foe.stamina=100
+	c.foe.health=140
+	c.hero.phase="windup"
+	check(c.resolve_hit(true)=="block" and c.foe.health<140 and c.foe.health>130,"A blocked heavy blow chips through the guard")
+	c.hero.heavy=false
+	check(CombatRules.finisher([3,1],0).id=="crossing" and CombatRules.finisher([2,0],2).id=="serpent" and CombatRules.finisher([1,1],0).is_empty(),"Forms complete only from their full sequence")
+	check(CombatRules.combo_progress([3,1]).step==2 and CombatRules.combo_progress([1]).step==0 and CombatRules.combo_progress([0,2]).step==1,"Form progress follows the tail of the chain")
+	c.hero.phase="idle"
+	c.hero.stamina=100
+	c.hero.chain=[3,1]
+	c.hero.chain_time=1.0
+	c.hero.guard=0
+	c.attack(false)
+	check(c.hero.combo=="crossing","The third cut of a form is flagged as its finisher")
+	c.foe.phase="idle"
+	c.foe.blocking=true
+	c.foe.guard=0
+	c.foe.block_age=99
+	c.foe.stamina=100
+	c.foe.exhaust=0
+	health=c.foe.health
+	check(c.resolve_hit(true)=="hit" and c.foe.health<health and c.hero.chain.is_empty(),"The Crossing cut finisher forces a held guard and resets the chain")
+	c.hero.phase="idle"
+	c.hero.chain=[3,1]
+	c.hero.chain_time=0
+	c.attack(false)
+	check(c.hero.combo=="","A stale chain does not complete a form")
+	c.hero.phase="recovery"
+	c.hero.timer=.1
+	c.hero.total=.38
+	check(not c.attack(false) and c.buffered==0,"An attack late in recovery is buffered")
+	c.buffer_time=.3
+	c.tick(c.hero,.2,true)
+	check(c.hero.phase=="windup","The buffered attack begins as soon as recovery ends")
+	c.hero.phase="recovery"
+	c.hero.timer=.1
+	c.buffered=-1
+	c.guard_held=true
+	c.hero.blocking=false
+	c.tick(c.hero,.2,true)
+	check(c.hero.blocking and c.hero.block_age>1,"A held guard rises again after recovery, never as a perfect block")
+	c.guard_held=false
+	c.hero.blocking=false
+	check(CombatRules.partner(1).feint_chance==0 and CombatRules.partner(4).read_chance>CombatRules.partner(1).read_chance and CombatRules.partner(1).health==140,"The partner grows sharper with the player's level")
+	check(c.salute<=0 or c.fight_time==0,"The bout opens with a salute before the partner attacks")
 	c.stop("Visual check")
 	c.respawn=0
 	c.start()
@@ -113,6 +222,27 @@ func run(game: Node) -> void:
 	c.pose_sword(c.enemy_sword,c.foe,0)
 	c.pose_sword(c.hero_sword,c.hero,0)
 	await shot("stance")
+	# Lanes are read from the player's side: a Right guard sits on screen right for both fighters.
+	c.foe.phase="idle"
+	c.foe.guard=1
+	c.hero.phase="idle"
+	c.hero.guard=1
+	c.pose_sword(c.enemy_sword,c.foe,0)
+	c.pose_sword(c.hero_sword,c.hero,0)
+	check(c.hero_sword.global_position.x>game.player.position.x+.2 and c.enemy_sword.global_position.x>c.enemy.position.x+.2,"Right-lane guards sit on the player's right for both fighters")
+	check(is_instance_valid(c.hero_stance) and is_instance_valid(c.hero_grip) and c.hero_stance.get_index()<c.hero_grip.get_index(),"Posture is layered before the grip solve on the player rig")
+	c.hero.guard=0
+	c.pose_sword(c.hero_sword,c.hero,0)
+	await wait(.2)
+	# Modifier results are restored after each skeleton update, so the solver reports its own reach.
+	check(c.hero_grip.reach_error<.03,"The hands stay on the grip through the posture layer")
+	c.enemy.position=c.CENTER+Vector3(2.0,.1,.2)
+	c.set_physics_process(true)
+	await wait(.6)
+	c.set_physics_process(false)
+	check(absf(wrapf(game.yaw-c.lock_yaw(),-PI,PI))<.6,"Third person softly locks the view onto the swordsman")
+	c.enemy.position=c.CENTER+Vector3(0,.1,-1)
+	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	game.camera_mode=1
 	game.camera_height=1.65
 	game.camera_pitch=0
@@ -152,6 +282,17 @@ func run(game: Node) -> void:
 	c.set_physics_process(true)
 	await wait(1.5)
 	check(c.foe.phase!="idle" or c.decision<1.1,"Live opponent approaches and schedules readable attacks")
+	# Hold a guard and let the partner work for a while: he must attack, keep the measure and stay upright.
+	c.hero.blocking=true
+	c.hero.guard=1
+	await wait(6)
+	var measure: float=game.player.position.distance_to(c.enemy.position)
+	check(c.foe_swings>=2 and measure>1.0 and measure<3.4 and c.enemy.position.y>-.5,"Partner presses the attack while keeping the measure (%d swings, you %d HP, him %d HP, %.1f m)"%[c.foe_swings,c.hero.health,c.foe.health,measure])
+	check(c.active or c.hero.health<=0,"A live bout continues until a fighter falls")
+	c.hero.blocking=false
+	if not c.active:
+		c.respawn=0
+		c.start()
 	# Exercise the actual physics collider instead of teleporting into it.
 	c.set_physics_process(false)
 	c.enemy.position=c.CENTER+Vector3(0,.1,-1)
