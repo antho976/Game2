@@ -322,7 +322,8 @@ func update_interaction() -> void:
 	nearest = ""
 	if is_instance_valid(combat) and (combat.active or player.position.distance_to(combat.CENTER)<4.5):
 		nearest="sparring"
-		prompt.text="F  ·  Yield" if combat.active else "F  ·  Challenge the swordsman     K  ·  Combat skills"
+		# There is no yielding once blades are out: the bout ends when one fighter falls.
+		prompt.text="" if combat.active else "F  ·  Challenge the swordsman     K  ·  Combat skills"
 		return
 	if inside_school():
 		if player.position.distance_to(school.teacher.global_position)<2.8:
@@ -374,8 +375,7 @@ func update_interaction() -> void:
 
 func interact() -> void:
 	if nearest=="sparring":
-		if combat.active: combat.stop("Sparring ended.")
-		else: combat.start()
+		if not combat.active: combat.start()
 		return
 	if player.activity_time > 0 or player.activity == "sit": return
 	if nearest=="teacher":
