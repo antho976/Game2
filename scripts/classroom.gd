@@ -1,5 +1,7 @@
 extends Control
 signal finished
+var chatter: AudioStreamPlayer
+var speech_clock := 0.0
 var game: Node3D
 var lesson_mode := true
 var active := true
@@ -45,6 +47,8 @@ func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	room=game.school
 	camera=room.camera
+	chatter=preload("res://scripts/dialogue_sounds.gd").new()
+	add_child(chatter)
 	build_dialogue()
 	if lesson_mode:
 		game.menus.reset_player(room.to_global(Vector3(0,.1,1.5)))
@@ -58,7 +62,8 @@ func enter_dialogue() -> void:
 	heading.show()
 	panel.show()
 	game.input_blocked=true
-	game.player.hide()
+	if lesson_mode and mode=="lesson": game.player.hide()
+	else: game.player.show()
 	game.ui.hide()
 	game.sync_camera_mouse()
 	camera.make_current()
@@ -69,6 +74,8 @@ func show_line() -> void:
 	set_text(lines[line_index][1])
 	advance_button.text="Continue  ·  Space" if line_index<lines.size()-1 else "Stand up"
 func set_text(text: String) -> void:
+	chatter.stop()
+	speech_clock=0
 	dialogue.text=text
 	dialogue.visible_characters=0
 	reveal=0
@@ -85,6 +92,11 @@ func ask() -> void:
 	for i in questions.size():
 		var button:=Button.new()
 		button.text=questions[i][0]
+		button.set_meta("asked",i in game.menus.asked_teacher_questions)
+		if i in game.menus.asked_teacher_questions:
+			button.add_theme_color_override("font_color",Color(.48,.51,.48))
+			button.add_theme_color_override("font_hover_color",Color(.70,.73,.68))
+			button.tooltip_text="Already discussed. You can ask again."
 		button.alignment=HORIZONTAL_ALIGNMENT_LEFT
 		button.custom_minimum_size.y=33
 		button.pressed.connect(func(): answer(i))
@@ -95,12 +107,16 @@ func ask() -> void:
 	choices.add_child(leave)
 	choices.show()
 func answer(index: int) -> void:
+	if index not in game.menus.asked_teacher_questions:
+		game.menus.asked_teacher_questions.append(index)
+		game.menus.save_game()
 	mode="answer"
 	choices.hide()
 	advance_button.show()
 	advance_button.text="Another question"
 	set_text(questions[index][1])
 func begin_roam() -> void:
+	chatter.stop()
 	mode="roam"
 	active=false
 	panel.hide()
@@ -117,6 +133,7 @@ func advance() -> void:
 	if not active or elapsed<.4 or mode=="questions": return
 	if dialogue.visible_characters>=0 and dialogue.visible_characters<dialogue.text.length():
 		dialogue.visible_characters=-1
+		chatter.stop()
 		return
 	if mode=="answer":
 		ask()
@@ -129,7 +146,15 @@ func _process(delta: float) -> void:
 	shade.color.a=1-smoothstep(0.,.8,elapsed)
 	if active and dialogue.visible_characters>=0:
 		reveal+=delta*42
+		var previous := dialogue.visible_characters
 		dialogue.visible_characters=mini(int(reveal),dialogue.text.length())
+		speech_clock-=delta
+		if dialogue.visible_characters>previous and speech_clock<=0:
+			var letter := dialogue.text.substr(maxi(0,dialogue.visible_characters-1),1)
+			if letter not in [" ",".",",","?","!",":",";"]:
+				chatter.syllable("pupil" if speaker.text=="A PUPIL" else "teacher")
+				speech_clock=.13
+			else: speech_clock=.18
 	if entered and not active and not room.contains(game.player.position):
 		finished.emit()
 		queue_free()

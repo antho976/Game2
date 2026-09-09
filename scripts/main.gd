@@ -64,7 +64,7 @@ func inside_school() -> bool:
 
 
 func _ready() -> void:
-	test_mode = "--combat-test" in OS.get_cmdline_user_args() or "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--interaction-test" in OS.get_cmdline_user_args() or "--combat-test" in OS.get_cmdline_user_args() or "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A],["right",KEY_D],["up",KEY_W],["down",KEY_S],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -147,6 +147,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--interaction-test" in OS.get_cmdline_user_args():
+		var suite=load("res://tests/interaction_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--combat-test" in OS.get_cmdline_user_args():
 		var suite=load("res://tests/combat_test.gd").new()
 		add_child(suite)
@@ -293,6 +297,9 @@ func _process(delta: float) -> void:
 		interact()
 
 func update_camera(delta: float) -> void:
+	if is_instance_valid(menus) and is_instance_valid(menus.classroom) and menus.classroom.active:
+		player.model.visible=player.visible
+		return
 	var title: bool = menus != null and menus.home
 	player.model.visible = (camera_mode!=1 and not inside_school()) or title or overview
 	if title or overview:
@@ -343,16 +350,29 @@ func update_interaction() -> void:
 			prompt.text="F  ·  Talk to the teacher"
 		else: prompt.text="The door is open. Stay as long as you wish."
 		return
+	# Services are deliberate interactions. Ambient pets must never steal their key.
+	var closest_service := 2.8
+	var service_text := ""
+	for service in world.interactions:
+		if service.id not in ["smith","archive"]: continue
+		var distance: float=player.position.distance_to(service.pos)
+		if distance<closest_service:
+			closest_service=distance
+			nearest=service.id
+			service_text="F  ·  Blacksmith shop" if service.id=="smith" else "F  ·  Research archive"
+	if not nearest.is_empty():
+		prompt.text=service_text if player.activity_time<=0 else ""
+		return
 	var best := 2.3
 	var text := ""
 	for animal in kit.life.animals:
-		if animal.kind != "cat": continue
+		if animal.kind != "cat" or not animal.friendly: continue
 		var distance: float = player.position.distance_to(animal.body.position)
 		if distance < 1.9 and distance < best:
 			best = distance
 			nearest = "cat:"+str(animal.body.get_instance_id())
 			nearest_pos = animal.body.position
-			text = "F  ·  Pet the cat" if animal.friendly else "Give the shy cat a little space"
+			text = "F  ·  Pet the cat"
 	for point in activities.points:
 		var distance: float = player.position.distance_to(point.pos)
 		if distance < point.radius and distance < best:

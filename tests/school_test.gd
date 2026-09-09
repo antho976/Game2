@@ -38,6 +38,18 @@ func run(game: Node) -> void:
 	await shot("questions")
 	lesson.answer(1)
 	check(lesson.dialogue.text==lesson.questions[1][1],"Questions display matching answers")
+	check(1 in menu.asked_teacher_questions,"Answered teacher questions are remembered")
+	lesson.ask()
+	await wait(.15)
+	check(lesson.choices.get_child(1).get_meta("asked",false),"Answered question is visually marked and remains available")
+	check(not lesson.choices.get_child(1).disabled,"Answered questions can be revisited")
+	check(game.player.visible and game.player.model.visible,"Optional teacher conversation shows the real player body")
+	check(not game.camera.get_node("FirstPersonHands").visible,"External dialogue camera hides first-person hands")
+	var save := ConfigFile.new()
+	check(save.load(menu.save_path)==OK and 1 in save.get_value("story","asked_teacher_questions",[]),"Question history is saved to disk")
+	lesson.answer(1)
+	await wait(.15)
+	check(lesson.chatter.stream!=null and lesson.chatter.bus=="Dialogue","Revealing dialogue triggers nonverbal speaker sounds")
 	lesson.begin_roam()
 	var space=game.get_world_3d().direct_space_state
 	var origin: Vector3=game.school.global_position

@@ -19,6 +19,7 @@ var fps_label: Label
 var fps_clock := 0.0
 var intro: Control
 var classroom: Control
+var asked_teacher_questions: Array[int] = []
 var story_stage := "done"
 
 func _ready() -> void:
@@ -194,6 +195,7 @@ func new_game() -> void:
 	if is_instance_valid(game.research_menu):
 		game.research_menu.toast_time=0
 		game.research_menu.toast_panel.hide()
+	asked_teacher_questions.clear()
 	game.research.restore({})
 	game.equipment.restore({})
 	reset_player(Vector3(0,.1,8.5))
@@ -259,6 +261,9 @@ func continue_game() -> void:
 	reset_player(pos)
 	game.equipment.restore(data.get_value("equipment","state",{}))
 	game.research.restore(data.get_value("research","state",{}))
+	asked_teacher_questions.clear()
+	for question in data.get_value("story","asked_teacher_questions",[]):
+		if int(question) in range(5) and int(question) not in asked_teacher_questions: asked_teacher_questions.append(int(question))
 	game.activities.watered = data.get_value("hub","watered",false)
 	game.village_day.clock = float(data.get_value("hub","clock",270.0))
 	resume()
@@ -273,6 +278,7 @@ func save_game() -> Error:
 	var data := ConfigFile.new()
 	var pos: Vector3 = game.player.seat_exit if game.player.activity == "sit" else game.player.last_safe
 	data.set_value("story","stage",story_stage)
+	data.set_value("story","asked_teacher_questions",asked_teacher_questions)
 	data.set_value("hub","position",pos)
 	data.set_value("hub","watered",game.activities.watered)
 	data.set_value("hub","clock",game.village_day.clock)

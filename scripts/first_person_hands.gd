@@ -16,7 +16,7 @@ func _ready() -> void:
 	for mesh in arms.find_children("*","MeshInstance3D",true,false):
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 func _process(delta: float) -> void:
-	visible = (game.camera_mode==1 or game.inside_school()) and not game.overview and not game.menus.home
+	visible = game.camera.current and (game.camera_mode==1 or game.inside_school()) and not game.overview and not game.menus.home
 	if not visible: return
 	var fighting: bool=is_instance_valid(game.combat) and game.combat.active
 	arms.rotation=Vector3(0,PI,0) if fighting else Vector3(-PI/2,PI,0)
