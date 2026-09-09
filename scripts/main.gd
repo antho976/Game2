@@ -21,7 +21,8 @@ var camera_pitch := 0.0
 var camera_sensitivity := .003
 
 func sync_camera_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (camera_mode==1 or inside_school()) and not input_blocked else Input.MOUSE_MODE_VISIBLE
+	var duel: bool = is_instance_valid(combat) and combat.active and camera_mode==2 and not combat.cinematic.active()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (camera_mode==1 or inside_school() or duel) and not input_blocked else Input.MOUSE_MODE_VISIBLE
 
 var yaw := 0.0
 var camera_target := Vector3(0,0,7)
@@ -303,6 +304,11 @@ func update_camera(delta: float) -> void:
 		player.model.visible=player.visible
 		return
 	var title: bool = menus != null and menus.home
+	if is_instance_valid(combat) and combat.cinematic.active():
+		# The execution frames itself; the player's own body is in the shot.
+		player.model.visible = true
+		combat.cinematic.place_camera(camera,delta)
+		return
 	player.model.visible = (camera_mode!=1 and not inside_school()) or title or overview
 	if title or overview:
 		if title: yaw += delta*.055
@@ -353,7 +359,8 @@ func update_interaction() -> void:
 	nearest = ""
 	if is_instance_valid(combat) and (combat.active or player.position.distance_to(combat.CENTER)<4.5):
 		nearest="sparring"
-		prompt.text="F  ·  End sparring" if combat.active else "F  ·  Spar with the swordsman     K  ·  Combat skills"
+		# There is no yielding once blades are out: the bout ends when one fighter falls.
+		prompt.text="" if combat.active else "F  ·  Challenge the swordsman     K  ·  Combat skills"
 		return
 	if inside_school():
 		if player.position.distance_to(school.teacher.global_position)<2.8:
@@ -411,8 +418,7 @@ func interact() -> void:
 		expedition.enter()
 		return
 	if nearest=="sparring":
-		if combat.active: combat.stop("Sparring ended.")
-		else: combat.start()
+		if not combat.active: combat.start()
 		return
 	if player.activity_time > 0 or player.activity == "sit": return
 	if nearest=="teacher":
