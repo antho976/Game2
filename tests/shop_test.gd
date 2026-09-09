@@ -11,6 +11,15 @@ func shot(game: Node,id: String) -> void:
 func run(game: Node) -> void:
 	await get_tree().create_timer(1).timeout
 	game.menus.new_game()
+	# The opening cinematic and lesson sit on layer 100 over everything; skip
+	# straight past them so the captures show the shop and not the fade.
+	if is_instance_valid(game.menus.intro): game.menus.intro.finish()
+	await get_tree().process_frame
+	game.menus.release_classroom()
+	game.menus.story_stage = "done"
+	game.menus.resume()
+	game.menus.save_game()
+	get_tree().paused = false
 	var gear = game.equipment
 	check(gear.gold==0 and gear.level==1,"New game has no debug currency or levels")
 	check(not gear.buy("warden_blade").is_empty() and gear.inventory.is_empty(),"Insufficient gold cannot purchase")
@@ -77,6 +86,10 @@ func run(game: Node) -> void:
 	game.nearest = "smith"
 	game.interact()
 	check(game.input_blocked,"Shop blocks movement")
+	# Item icons are rendered from the real gear; wait for the forge to finish.
+	if not game.smith_shop.thumbnails.ready_for_use: await game.smith_shop.thumbnails.finished
+	game.smith_shop.refresh()
+	await get_tree().create_timer(.6).timeout
 	await shot(game,"stock")
 	GearVisuals.apply(game.smith_shop.preview,{"helmet":GearCatalog.find("warden_helmet")})
 	await shot(game,"helmet")

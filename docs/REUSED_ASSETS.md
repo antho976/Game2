@@ -46,3 +46,7 @@ Source: original Ash & Oath crawler, commit `4a3c31f6c8634bf84f52702340a98b11de5
 ## Generated sounds
 
 Every file in `assets/audio` other than the nine reused recordings above is generated from `assets/audio/manifest.json` by `tools/generate_sounds.py` through the ElevenLabs sound-effects API and processed with ffmpeg. They are original to Game2; regenerate any of them by name with the script.
+
+## Fonts
+
+`assets/ui/display.ttf` and `assets/ui/display_bold.ttf` are Cinzel (regular and semibold) by Natanael Gama, distributed by Google Fonts under the SIL Open Font License 1.1. The full licence is kept alongside them in `assets/ui/CINZEL-OFL.txt`. The blacksmith screen uses it for every name and rubric; body text and numbers stay on the engine's default sans so figures remain quick to read.
