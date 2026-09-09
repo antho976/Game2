@@ -517,7 +517,13 @@ func refresh() -> void:
 	for entry in visible_entries:
 		var def: Dictionary = entry if page=="stock" else GearCatalog.find(entry.id)
 		var card := card_in(def,entry,entry==selected)
-		card.pressed.connect(func(): selected_id=def.id; selected_uid=0 if page=="stock" else entry.uid; preview.rotation.y=2.8 if def.slot=="weapon" else -.35; refresh())
+		card.pressed.connect(func():
+			selected_id=def.id
+			selected_uid=0 if page=="stock" else entry.uid
+			preview.rotation.y=2.8 if def.slot=="weapon" else -.35
+			# A locked or unaffordable piece answers with a thin purse instead of a click.
+			if page=="stock" and not game.equipment.buy_error(def.id).is_empty(): game.audio.ui("shop_buy_denied",-16)
+			refresh())
 		UiKit.sound(card)
 		rows.add_child(card)
 	if visible_entries.is_empty():

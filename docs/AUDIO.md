@@ -4,7 +4,11 @@ Every sound the village, the school, the menus and the sparring yard need, deriv
 
 Priority: **P1** is heard every minute of play and is missing or a placeholder; **P2** rounds out a scene; **P3** is polish.
 
-## 1. Current state
+## 0. Where things stand
+
+Every priority-1 sound in `assets/audio/manifest.json` has been generated with ElevenLabs and lives in `assets/audio` (about 190 files, 28 MB). The tables below keep the original audit for reference: an entry marked **missing** there is present today if its id is priority 1 in the manifest, and is still silent if it is priority 2 or 3. Generate the rest with `python3 tools/generate_sounds.py --priority 2` or `--all`.
+
+## 1. Current state at the time of the audit
 
 ### Recordings in `assets/audio`
 

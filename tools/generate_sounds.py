@@ -55,11 +55,22 @@ def request(key: str, text: str, seconds: float, influence: float, loop: bool) -
     raise SystemExit("ElevenLabs did not answer")
 
 
-def convert(source: str, target: str, loop: bool, gain_db: float) -> None:
-    if loop:
-        # Loops keep their full length; only level is matched.
+def duration(path: str) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
+def convert(source: str, target: str, loop: bool, gain_db: float, trim: bool = True) -> None:
+    # Loops become OGG and keep their full length; one-shots become PCM WAV.
+    codec = ["-c:a", "libvorbis", "-q:a", "5"] if loop else ["-c:a", "pcm_s16le"]
+    if loop or not trim:
         filters = f"volume={gain_db}dB,alimiter=limit=0.89"
-        codec = ["-c:a", "libvorbis", "-q:a", "5"]
     else:
         # Trim leading and trailing silence so the transient lands on the trigger.
         filters = (
@@ -67,7 +78,6 @@ def convert(source: str, target: str, loop: bool, gain_db: float) -> None:
             "areverse,silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.08,areverse,"
             f"volume={gain_db}dB,alimiter=limit=0.89,afade=t=in:d=0.004"
         )
-        codec = ["-c:a", "pcm_s16le"]
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-i", source, "-ac", "1", "-ar", "44100",
          "-af", filters] + codec + [target],
@@ -116,7 +126,8 @@ def main() -> None:
         for n in range(1, int(entry.get("variations", 1)) + 1):
             target = os.path.join(AUDIO, f"{entry['id']}_{n:02d}.{ext}")
             stem = os.path.join(AUDIO, f"{entry['id']}_{n:02d}")
-            if not force and any(os.path.exists(stem + "." + e) for e in ("wav", "ogg", "mp3")):
+            # A header-only file is a failed take (everything trimmed away); redo it.
+            if not force and any(os.path.exists(stem + "." + e) and os.path.getsize(stem + "." + e) > 1000 for e in ("wav", "ogg", "mp3")):
                 continue
             plan.append((entry, n, target, loop))
     if listing or not plan:
@@ -143,6 +154,15 @@ def main() -> None:
                 handle.write(audio)
             gain = measured_gain(raw, float(entry.get("peak_db", -3.0)))
             convert(raw, target, loop, gain)
+            if not loop and duration(target) < 0.05:
+                # The trim ate a very quiet take; keep it whole rather than empty.
+                convert(raw, target, loop, gain, trim=False)
+            if duration(target) < 0.05:
+                print("   silent result, asking again")
+                audio = request(key, prompt + ", clearly audible", float(entry.get("seconds", 0)), min(1.0, float(entry.get("influence", 0.4)) + .2), loop)
+                with open(raw, "wb") as handle:
+                    handle.write(audio)
+                convert(raw, target, loop, measured_gain(raw, float(entry.get("peak_db", -3.0))), trim=False)
     print("Done. Godot re-imports new files on the next launch (play.fish imports first).")
 
 

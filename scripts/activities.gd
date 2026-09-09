@@ -146,6 +146,10 @@ func _physics_process(delta: float) -> void:
 				velocity += away.normalized()*(clearance-away.length())*2
 		duck.model.velocity = duck.model.velocity.move_toward(velocity,delta*1.5)
 		duck.model.move_and_slide()
+		# Paddling is a loop that rides on the wake: audible while the duck actually moves.
+		var paddle_key: String = "paddle:"+str(duck.model.get_instance_id())
+		if duck.model.velocity.length() > .18: game.audio.loop(paddle_key,"duck_paddle",Vector3(0,.1,0),-26,{"bus":"SFX","max_distance":9,"fade_in":true,"parent":duck.model})
+		else: game.audio.stop(paddle_key,.8)
 		if duck.model.velocity.length()>.08:
 			duck.model.rotation.y = lerp_angle(duck.model.rotation.y,atan2(duck.model.velocity.x,duck.model.velocity.z),delta*2.5)
 		duck.art.position.y = sin(elapsed*2+duck.phase)*.013
