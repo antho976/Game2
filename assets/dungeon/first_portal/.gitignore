@@ -1,0 +1,3 @@
+# Godot extracts these textures from the embedded GLBs on import.
+*.png
+*.png.import

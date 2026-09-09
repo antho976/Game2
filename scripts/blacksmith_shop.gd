@@ -195,7 +195,7 @@ func _ready() -> void:
 	status_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	status_dot.add_theme_stylebox_override("panel",UiKit.flat(GOLD,Color(0,0,0,0),0,5,Vector2.ZERO))
 	strip_row.add_child(status_dot)
-	status = UiKit.label(strip_row,"Gold and levels will come from progression. Combat comes later.",14,MUTED)
+	status = UiKit.label(strip_row,"Claim your first blade here. Earn gold and experience in the yard or the mine.",14,MUTED)
 	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	confirm = ConfirmationDialog.new()
 	confirm.title = "Risk this item?"
@@ -287,6 +287,10 @@ func clear(parent: Node) -> void:
 		parent.remove_child(child)
 		child.queue_free()
 func open() -> void:
+	if not game.equipment.starter_claimed:
+		page="stock"
+		selected_id="warden_blade"
+		filter_slot="all"
 	active = true
 	game.audio.ui("shop_open",-10)
 	game.audio.set_loop_volume("forge",-13)
@@ -562,6 +566,12 @@ func refresh() -> void:
 	display[def.slot] = def
 	GearVisuals.apply(preview,display)
 	if page=="stock":
+		if def.id=="warden_blade" and not game.equipment.starter_claimed:
+			UiKit.label(detail,"A blade for your first journey. The smith offers you one greatsword, free of charge.",14,GOOD)
+			UiKit.button(detail,"Accept starter greatsword  ·  Free",func():
+				var error: String=game.equipment.claim_starter()
+				message(error if not error.is_empty() else "It's yours. Keep your guard up. Press I to open your inventory.",BAD if not error.is_empty() else GOOD)
+			,false,"primary")
 		var reason: String = game.equipment.buy_error(selected_id)
 		UiKit.button(detail,"Buy  ·  %d gold"%game.equipment.purchase_price(def.id),func():
 			var error: String = game.equipment.buy(selected_id)

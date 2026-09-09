@@ -146,6 +146,7 @@ func release_classroom() -> void:
 	game.camera.make_current()
 
 func show_home() -> void:
+	if is_instance_valid(game.expedition):game.expedition.suspend()
 	release_classroom()
 	home = true
 	open()
@@ -164,7 +165,7 @@ func show_pause() -> void:
 	home = false
 	game.audio.ui("ui_panel_open")
 	open()
-	clear("Take a breath", "Your place in the village is saved automatically.")
+	clear("Take a breath", "Your expedition and unbanked haul are saved. Defeat loses the haul." if is_instance_valid(game.expedition) and game.expedition.active else "Your place in the village is saved automatically.")
 	button("Resume",resume).grab_focus()
 	button("Options",show_options)
 	button("Save & Main Menu",func(): save_game(); show_home())
@@ -196,6 +197,7 @@ func reset_player(pos: Vector3) -> void:
 	game.camera_target = pos
 
 func new_game() -> void:
+	if is_instance_valid(game.expedition):game.expedition.restore({})
 	if is_instance_valid(game.combat) and game.combat.active: game.combat.stop("New game")
 	if is_instance_valid(intro) or (is_instance_valid(classroom) and classroom.active): return
 	release_classroom()
@@ -265,6 +267,7 @@ func continue_game() -> void:
 	if data.load(save_path) != OK: return
 	var pos: Vector3 = data.get_value("hub","position",Vector3(0,.1,8.5))
 	if not pos.is_finite() or (pos.x < -19 or pos.x > 26) or (pos.z < -28 or pos.z > 24) or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
+	if is_instance_valid(game.expedition):game.expedition.restore(data.get_value("expedition","state",{}))
 	reset_player(pos)
 	game.equipment.restore(data.get_value("equipment","state",{}))
 	game.research.restore(data.get_value("research","state",{}))
@@ -278,12 +281,16 @@ func continue_game() -> void:
 	story_stage = data.get_value("story","stage","done")
 	if story_stage=="cinematic": play_intro()
 	elif story_stage=="classroom": play_classroom()
-	else: game.research_menu.show_unread()
+	else:
+		game.research_menu.show_unread()
+		if is_instance_valid(game.expedition):game.expedition.resume_saved()
 
 func save_game() -> Error:
 	if not started: return ERR_UNAVAILABLE
 	var data := ConfigFile.new()
 	var pos: Vector3 = game.player.seat_exit if game.player.activity == "sit" else game.player.last_safe
+	if is_instance_valid(game.expedition) and game.expedition.active:pos=game.expedition.return_position
+	if is_instance_valid(game.expedition):data.set_value("expedition","state",game.expedition.snapshot())
 	data.set_value("story","stage",story_stage)
 	data.set_value("story","asked_teacher_questions",asked_teacher_questions)
 	data.set_value("hub","position",pos)
@@ -335,6 +342,7 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 			if is_instance_valid(game.research_menu) and game.research_menu.active: return
+			if is_instance_valid(game.inventory_menu) and game.inventory_menu.active: return
 			if is_instance_valid(game.smith_shop) and game.smith_shop.active: return
 			if confirm.visible: confirm.hide()
 			elif active:
@@ -434,6 +442,7 @@ func show_options() -> void:
 	).grab_focus()
 
 func apply_camera_settings() -> void:
+	game.lock_mode=clampi(int(settings.get_value("options","lock_mode",0)),0,1)
 	game.camera_mode = clampi(int(settings.get_value("options","camera_mode",0)),0,3)
 	game.camera_distance = clampf(float(settings.get_value("options","camera_distance",15)),1,40)
 	game.camera_height = clampf(float(settings.get_value("options","camera_height",19)),.8,45)
@@ -470,6 +479,14 @@ func camera_slider(title: String,key: String,low: float,high: float,step: float)
 
 func show_camera_options() -> void:
 	clear("Camera", "Changes apply immediately and save automatically.")
+	text("Targeting",18)
+	var targeting:=OptionButton.new()
+	targeting.add_item("Aim lock · follows the target you point at")
+	targeting.add_item("Hard lock · holds the same enemy")
+	targeting.select(game.lock_mode)
+	box.add_child(targeting)
+	targeting.item_selected.connect(func(index):store_option("lock_mode",index);apply_camera_settings())
+	text("T releases or reacquires a lock. X draws or sheathes your sword. Hard lock never changes target from looking around.",14)
 	var mode := OptionButton.new()
 	for title in ["Overhead","First person","Third person","Far overhead"]: mode.add_item(title)
 	mode.select(game.camera_mode)

@@ -87,7 +87,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 	else: velocity = Vector3.ZERO
 	if direction.length() > .1: facing = atan2(direction.x,direction.z)
-	if is_instance_valid(game.combat) and game.combat.active:
+	if is_instance_valid(game.combat) and game.combat.active and game.lock_enabled:
 		var target: Vector3=game.combat.enemy.position-position
 		facing=atan2(target.x,target.z)
 	model.rotation.y = lerp_angle(model.rotation.y,facing,minf(delta*10,1))

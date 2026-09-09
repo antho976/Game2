@@ -3,6 +3,8 @@ signal changed
 var game: Node
 var gold := 0
 var diamonds := 0
+var life_essence := 0
+var starter_claimed := false
 var level := 1
 var xp := 0
 var skill_points := 0
@@ -17,8 +19,10 @@ var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.randomize()
 func snapshot() -> Dictionary:
-	return {"version":3,"xp":xp,"skill_points":skill_points,"combat_skills":combat_skills.duplicate(),"gold":gold,"diamonds":diamonds,"level":level,"inventory":inventory.duplicate(true),"equipped":equipped.duplicate(),"next_uid":next_uid,"survival_bonus":survival_bonus,"stat_bonus":stat_bonus}
+	return {"version":5,"starter_claimed":starter_claimed,"life_essence":life_essence,"xp":xp,"skill_points":skill_points,"combat_skills":combat_skills.duplicate(),"gold":gold,"diamonds":diamonds,"level":level,"inventory":inventory.duplicate(true),"equipped":equipped.duplicate(),"next_uid":next_uid,"survival_bonus":survival_bonus,"stat_bonus":stat_bonus}
 func restore(data: Dictionary) -> void:
+	starter_claimed=bool(data.get("starter_claimed",false))
+	life_essence=maxi(0,int(data.get("life_essence",0)))
 	gold = maxi(0,int(data.get("gold",0)))
 	diamonds = maxi(0,int(data.get("diamonds",0)))
 	level = maxi(1,int(data.get("level",1)))
@@ -74,6 +78,15 @@ func buy(id: String) -> String:
 	gold -= purchase_price(id)
 	inventory.append({"uid":next_uid,"id":id,"upgrade":0,"earned_gain":0.0})
 	next_uid += 1
+	return commit(before)
+func claim_starter() -> String:
+	if starter_claimed:return "You already received the blacksmith's starter weapon."
+	var before:=snapshot()
+	var uid:=next_uid
+	inventory.append({"uid":uid,"id":"warden_blade","upgrade":0,"earned_gain":0.0})
+	next_uid+=1
+	starter_claimed=true
+	if not equipped.has("weapon"):equipped.weapon=uid
 	return commit(before)
 func equip(uid: int) -> String:
 	var item := owned(uid)
@@ -131,11 +144,13 @@ func upgrade(uid: int, expected_rank: int,quote: Dictionary = {}) -> Dictionary:
 	error = commit(before)
 	return {"error":error,"survived":survived}
 
-func award_combat(amount: int,reward_gold: int) -> String:
+func award_combat(amount: int,reward_gold: int,reward_diamonds := 0,reward_essence := 0) -> String:
 	var before := snapshot()
 	var old_level := level
 	xp+=maxi(0,amount)
 	gold+=maxi(0,reward_gold)
+	diamonds+=maxi(0,reward_diamonds)
+	life_essence+=maxi(0,reward_essence)
 	while xp>=CombatRules.xp_needed(level):
 		xp-=CombatRules.xp_needed(level)
 		level+=1

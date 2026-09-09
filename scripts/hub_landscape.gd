@@ -61,6 +61,7 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 		kit.world.block(p+Vector3(0,1,0),Vector3(.65,2,.65)*size)
 
 func plantable(p: Vector3) -> bool:
+	if absf(p.x-22)<2.9 and absf(p.z+1.2)<1.6: return false
 	if absf(p.x-4.6)<5.5 and absf(p.z+19.0)<5.3: return false
 	if outside_water(p): return false
 	if absf(p.x+9.1)<1.8 and absf(p.z-8.2)<1.2: return false

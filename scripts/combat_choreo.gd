@@ -86,7 +86,7 @@ static func blade(f: Dictionary,progress: float,breath: float,clock: float) -> D
 				xf.origin+=Vector3(sin(clock*90)*.012,sin(clock*70)*.01,0)*tremor
 		"recovery":
 			var t: float=progress
-			var through: float=smoothstep(0,.30,t)
+			var through: float=1.0-pow(1.0-clampf(t/.30,0,1),2.2) # Leaves contact at full speed.
 			var back: float=smoothstep(.30,1.0,t)
 			var rest: Transform3D=guard(lane) if f.blocking else blend(ready(breath),guard(lane),.30)
 			var carried: Transform3D=blend(strike(lane,heavy),follow(lane,heavy),through)

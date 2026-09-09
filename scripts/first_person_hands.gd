@@ -18,7 +18,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	visible = game.camera.current and (game.camera_mode==1 or game.inside_school()) and not game.overview and not game.menus.home and not (is_instance_valid(game.combat) and game.combat.cinematic.active())
 	if not visible: return
-	var fighting: bool=is_instance_valid(game.combat) and game.combat.active
+	var fighting: bool=game.sword_drawn
 	arms.rotation=Vector3(0,PI,0) if fighting else Vector3(-PI/2,PI,0)
 	arms.position=Vector3(0,-1.60,0) if fighting else Vector3(0,-.25,-1.0)
 	arms.scale=Vector3.ONE*(.97 if fighting else .65)

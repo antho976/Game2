@@ -3,8 +3,9 @@ extends SkeletonModifier3D
 var sword: Node3D
 var reach_error := 0.0 # Distance left between the leading hand and its grip point after the last solve.
 func _process_modification() -> void:
-	if not is_instance_valid(sword) or not sword.is_visible_in_tree(): return
+	if not is_inside_tree() or not is_instance_valid(sword) or not sword.is_inside_tree() or not sword.is_visible_in_tree(): return
 	var rig := get_skeleton()
+	if not is_instance_valid(rig) or not rig.is_inside_tree():return
 	for side in ["R","L"]:
 		var upper := rig.find_bone("UpperArm."+side)
 		var lower := rig.find_bone("Forearm."+side)
