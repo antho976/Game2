@@ -23,6 +23,7 @@ var filter_slot := "all"
 var confirm: ConfirmationDialog
 var pending_uid := 0
 var pending_rank := 0
+var pending_quote: Dictionary = {}
 const GOLD := Color(.87,.71,.37)
 const PARCH := Color(.91,.87,.75)
 const MUTED := Color(.63,.65,.59)
@@ -313,6 +314,9 @@ func _ready() -> void:
 	skin(confirm.get_ok_button(),"danger")
 	skin(confirm.get_cancel_button(),"secondary")
 	root.add_child(confirm)
+	game.research.changed.connect(func():
+		if active: refresh()
+	)
 	root.hide()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 func build_fitting_room(viewport: SubViewport) -> void:
@@ -499,14 +503,15 @@ func card_in(def: Dictionary,entry: Dictionary,selected: bool) -> Button:
 		coin.custom_minimum_size = Vector2(14,14)
 		coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		footer.add_child(coin)
-		var affordable: bool = game.equipment.gold>=def.price
-		var price := label_in(footer,str(def.price),14,GOLD if affordable and not locked else Color(.72,.50,.42))
+		var affordable: bool = game.equipment.gold>=game.equipment.purchase_price(def.id)
+		var price := label_in(footer,str(game.equipment.purchase_price(def.id)),14,GOLD if affordable and not locked else Color(.72,.50,.42))
 		price.autowrap_mode = TextServer.AUTOWRAP_OFF
 		var tier_tag := label_in(footer,"· "+tier[0],12,tint)
 		tier_tag.autowrap_mode = TextServer.AUTOWRAP_OFF
 		tier_tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	else:
 		var pips := RankPips.new()
+		pips.maximum = game.equipment.max_upgrade()
 		pips.rank = int(entry.upgrade)
 		pips.custom_minimum_size = Vector2(62,12)
 		pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -635,7 +640,7 @@ func refresh() -> void:
 	selected_uid = 0 if page=="stock" else int(selected.uid)
 	var def := GearCatalog.find(selected_id)
 	var rank: int = selected.get("upgrade",0)
-	var stats: Dictionary = game.equipment.stats({"id":selected_id,"upgrade":rank})
+	var stats: Dictionary = game.equipment.stats(selected)
 	item_header(def,rank)
 	label_in(detail,def.description,14,MUTED)
 	divider(detail)
@@ -653,7 +658,7 @@ func refresh() -> void:
 	GearVisuals.apply(preview,display)
 	if page=="stock":
 		var reason: String = game.equipment.buy_error(selected_id)
-		button_in(detail,"Buy  ·  %d gold"%def.price,func():
+		button_in(detail,"Buy  ·  %d gold"%game.equipment.purchase_price(def.id),func():
 			var error: String = game.equipment.buy(selected_id)
 			message(error if not error.is_empty() else "Purchased "+def.name+". It hangs under Your equipment.",BAD if not error.is_empty() else GOOD)
 		,not reason.is_empty(),"primary")
@@ -678,16 +683,17 @@ func refresh() -> void:
 	else:
 		heading(detail,"Tempering")
 		var pips := RankPips.new()
+		pips.maximum = game.equipment.max_upgrade()
 		pips.rank = rank
-		pips.next = rank<GearCatalog.MAX_UPGRADE
+		pips.next = rank<game.equipment.max_upgrade()
 		pips.custom_minimum_size = Vector2(150,22)
 		var pip_row := HBoxContainer.new()
 		pip_row.add_theme_constant_override("separation",12)
 		detail.add_child(pip_row)
 		pip_row.add_child(pips)
-		var rank_text := label_in(pip_row,"Fully tempered  ·  +%d"%rank if rank>=GearCatalog.MAX_UPGRADE else "+%d  →  +%d"%[rank,rank+1],18,GOLD)
+		var rank_text := label_in(pip_row,"Fully tempered  ·  +%d"%rank if rank>=game.equipment.max_upgrade() else "+%d  →  +%d"%[rank,rank+1],18,GOLD)
 		rank_text.autowrap_mode = TextServer.AUTOWRAP_OFF
-		if rank<GearCatalog.MAX_UPGRADE:
+		if rank<game.equipment.max_upgrade():
 			var chance: float = game.equipment.survival(selected)
 			var gauge_row := HBoxContainer.new()
 			gauge_row.add_theme_constant_override("separation",10)
@@ -707,7 +713,7 @@ func refresh() -> void:
 			odds.custom_minimum_size.x = 46
 			odds.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			odds.autowrap_mode = TextServer.AUTOWRAP_OFF
-			var next: Dictionary = game.equipment.stats({"id":selected_id,"upgrade":rank+1})
+			var next: Dictionary = game.equipment.next_stats(selected)
 			var key := "damage" if def.slot=="weapon" else "protection"
 			var gain_row := HBoxContainer.new()
 			gain_row.add_theme_constant_override("separation",10)
@@ -730,10 +736,11 @@ func request_upgrade() -> void:
 	if item.is_empty(): return
 	pending_uid = selected_uid
 	pending_rank = item.upgrade
+	pending_quote = game.equipment.upgrade_quote(item)
 	confirm.dialog_text = "%s +%d → +%d\nCost: %d gold\nSurvival: %.0f%%\n\nFailure permanently destroys copy #%d. Gold is spent either way."%[GearCatalog.find(item.id).name,item.upgrade,item.upgrade+1,game.equipment.upgrade_cost(item),game.equipment.survival(item)*100,item.uid]
 	confirm.popup_centered(Vector2i(500,270))
 func attempt_upgrade() -> void:
-	var result: Dictionary = game.equipment.upgrade(pending_uid,pending_rank)
+	var result: Dictionary = game.equipment.upgrade(pending_uid,pending_rank,pending_quote)
 	if not result.error.is_empty(): message(result.error,BAD)
 	elif result.survived: message("The temper held. The piece is stronger.",GOOD)
 	else: message("The forge ruined it. That copy is gone for good.",BAD)
@@ -840,15 +847,16 @@ class StatBar extends Control:
 			var x: float = clampf(baseline/maximum,0,1)*size.x
 			draw_line(Vector2(x,-3),Vector2(x,size.y+3),Color(1,1,1,.9),2)
 class RankPips extends Control:
+	var maximum := GearCatalog.MAX_UPGRADE
 	var rank := 0
 	var next := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		resized.connect(queue_redraw)
 	func _draw() -> void:
-		var step: float = size.x/GearCatalog.MAX_UPGRADE
+		var step: float = size.x/maximum
 		var r: float = minf(size.y*.5,step*.36)
-		for i in GearCatalog.MAX_UPGRADE:
+		for i in maximum:
 			var c := Vector2(step*(i+.5),size.y*.5)
 			var diamond := PackedVector2Array([c+Vector2(0,-r),c+Vector2(r,0),c+Vector2(0,r),c+Vector2(-r,0)])
 			if i<rank: draw_colored_polygon(diamond,Color(.90,.74,.38))
