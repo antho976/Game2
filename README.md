@@ -14,6 +14,8 @@ Or import `project.godot` into Godot 4.7 and press F5. The launcher imports asse
 
 - WASD/arrows: walk; Shift: run.
 - F: interact with the nearest animal or activity.
+- I: inventory, equipment and currencies (outside combat). K: combat skills.
+- X: draw or sheath the equipped sword. T: release or reacquire a combat target.
 - Mouse wheel: zoom. Middle mouse drag: rotate the elevated camera.
 - Tab: village overview. H: hide interface. M: mute audio. Options has a slider for music, ambience, effects, interface and voices.
 - R: return to the arrival path. F11: fullscreen. Escape: pause/menu.
@@ -35,6 +37,26 @@ The traversal character begins unarmed and uses the refined player model on the 
 Prototype upgrades begin with five ranks with survival chances of 85%, 72%, 60%, 48%, and 35%. Equipment research unlocks up to +8 with later base survival of 28%, 22%, and 16%. Failure consumes the gold and permanently destroys that exact copy, including on the first attempt; the confirmation displays both chances. Each rank initially adds 10% of base damage or protection; research improves only future attempts, with earned gains saved per item. Gold cost is rounded up from 25% of the purchase price times the next rank. These values are provisional. Research improves survival and future stat gains, and trade studies reduce prices. Early upgrades can become safe, but the final upgrade always retains risk.
 
 Shop checks: `./play.fish -- --shop-test`. This uses isolated saves and test-only currency to exercise level/gold gates, duplicate copies, equipment, success/destruction, stale confirmations, failed-save rollback and legacy saves, and captures the rendered shop and both plate sets.
+
+## Inventory and combat HUD
+
+The blacksmith offers one free Warden Greatsword per character. Accept it in the shop; it becomes an owned item and equips automatically if the weapon slot is empty. The claim is saved, cannot be repeated after losing the sword, and resets on New Game. Existing saves can claim it too.
+
+Press I to open the inventory outside combat. Inspect, filter and sort owned gear, compare with equipped pieces, equip or remove all five slots, rotate the equipped character preview, and view gold, diamonds and living essence. Each duplicate keeps its own upgrade rank. Equipment changes save immediately and roll back on write failure. Selling, dropping and consumables are not part of this inventory pass.
+
+The compact bottom dock shows health and stamina, with a thin exhaustion strip. Skill tiles, XP text and the shortcut legend have been removed; K still opens skill learning. Enemy health and exhaustion sit above the active enemy. Four small arrows show the selected lane, enemy guard and an amber incoming attack direction. A red spark on the enemy blade and matching red arrow flash signal the final 0.20-second perfect-parry window.
+
+Settings → Camera offers aim lock and hard lock. Aim lock follows the enemy under the pointer in overhead views or near the screen centre in first/third person; hard lock keeps its opponent until released with T. Press T again to acquire the pointed enemy. Target switches preserve damage, exhaustion and recovery, and wait until a committed player swing ends. X draws or sheathes in exploration and combat; a toggle during an attack waits for recovery. Drawing requires an equipped weapon except for the training loan.
+
+Checks: `./play.fish --headless -- --inventory-test`; omit `--headless` to capture the inventory at three window sizes, the starter offer and the HUD.
+
+## First expedition
+
+The portal beside the original eastern dummy now enters **The Spent Works**. Eight Wardens occupy its rooms and use the shared directional combat system, with one active opponent at a time. Gather guarded living fragments, then return through the arrival gate to bank gold, diamonds, living essence and XP. Defeat loses the unbanked haul; Continue restores an unfinished expedition. No boss is included. See `docs/FIRST_PORTAL.md` for scope and validation.
+
+Expedition checks: `./play.fish --headless -- --expedition-test`. Native captures: `./play.fish -- --expedition-capture`.
+
+Targeting and weapon checks: `./play.fish --headless -- --targeting-test`; omit `--headless` for rendered HUD, arrow and draw/sheath captures.
 
 ## Sources and checks
 
@@ -84,4 +106,4 @@ Press F at the researcher to open branching Character, Equipment, Trade and Scho
 
 ## Sword combat
 
-Press F near the swordsman in the yard east of the school (or F6 from the hub) to spar. It is a directional greatsword duel in four lanes read from your side: High, Right, Low, Left. Arrows, a mouse swipe, or RMB plus a swipe choose the lane; LMB cuts, Q or Shift+LMB cuts heavy, RMB guards, Space quicksteps. A matching guard blocks, a freshly raised one within 0.2 seconds parries and opens a counter window, and a feint (changing lane in the first half of a swing) beats a partner who reads your lane. Two forms, Crossing cut (Left, Right, High) and Serpent's coil (Low, High, Low), give their last cut a property. Swings that meet in one lane clash. The swordsman keeps his measure, reads and answers your swings, feints and doubles at higher levels, and every attack he makes is telegraphed on the reticle drawn over his chest, with a ring that closes on it and turns white when a guard raised now would parry. Blows carry weight: hit-stop scaled by heft, camera recoil away from the lane that landed, blood on the yard, staggers on heavy and critical hits, and slow-motion finishes. Victories pay gold and XP; levels give skill points for two short combat branches (K). See `docs/COMBAT.md` for the full rules and `./play.fish --headless -- --combat-test` for the checks.
+Press F near the swordsman in the yard east of the school (or F6 from the hub) to spar. It is a directional greatsword duel in four lanes read from your side: High, Right, Low, Left. Arrows, a mouse swipe, or RMB plus a swipe choose the lane; LMB cuts, Q or Shift+LMB cuts heavy, RMB guards, Space quicksteps. A matching guard blocks, a freshly raised one within 0.2 seconds parries and opens a counter window, and a feint (changing lane in the first half of a swing) beats a partner who reads your lane. Two forms, Crossing cut (Left, Right, High) and Serpent's coil (Low, High, Low), give their last cut a property. Swings that meet in one lane clash. The swordsman keeps his measure, reads and answers your swings, feints and doubles at higher levels, and every attack he makes is telegraphed on the reticle drawn over his chest, with an amber direction arrow followed by a red weapon spark and red arrow flash when a guard raised now would parry. Blows carry weight: hit-stop scaled by heft, camera recoil away from the lane that landed, blood on the yard, staggers on heavy and critical hits, and slow-motion finishes. Victories pay gold and XP; levels give skill points for two short combat branches (K). See `docs/COMBAT.md` for the full rules and `./play.fish --headless -- --combat-test` for the checks.

@@ -21,9 +21,10 @@ func _ready() -> void:
 	material.no_depth_test=false
 	material_override=material
 func _physics_process(delta: float) -> void:
+	if not is_inside_tree(): return
 	for sample in samples: sample[2]+=delta
 	while not samples.is_empty() and samples[0][2]>life: samples.pop_front()
-	if active and is_instance_valid(sword) and sword.is_visible_in_tree():
+	if active and is_instance_valid(sword) and sword.is_inside_tree() and sword.is_visible_in_tree():
 		samples.append([sword.to_global(Vector3(0,1.25,0)),sword.to_global(Vector3(0,.30,0)),0.0])
 		if samples.size()>18: samples.pop_front()
 	global_transform=Transform3D.IDENTITY
