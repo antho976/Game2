@@ -51,4 +51,5 @@ func set_weapon(item: Dictionary) -> void:
 	builder.sword(root,item.style)
 	combat_grip=preload("res://scripts/combat_grip.gd").new()
 	combat_grip.sword=root
+	combat_grip.lead="L" # The player's own right hand leads on the grip; see combat_grip.gd.
 	arms.find_children("*","Skeleton3D",true,false)[0].add_child(combat_grip)

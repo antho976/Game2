@@ -467,23 +467,90 @@ func run(game: Node) -> void:
 	# Every authored key keeps both hands on the grip: chamber, strike and follow-through in each lane.
 	var worst := 0.0
 	for lane in 4:
-		for state in [["windup",.55,false],["windup",.99,true],["recovery",.15,true],["recovery",.15,false],["idle",0.0,false]]:
+		for state in [["windup",.55,false],["windup",.55,true],["windup",.99,true],["windup",.99,false],["recovery",.15,true],["recovery",.15,false],["idle",0.0,false],["idle",0.0,true]]:
 			c.hero.phase=state[0]
 			c.hero.attack_dir=lane
 			c.hero.guard=lane
 			c.hero.heavy=state[2]
-			c.hero.blocking=state[0]=="idle"
+			c.hero.blocking=state[0]=="idle" and not state[2] # The last idle key is the unguarded ready.
 			c.hero.total=.9
 			c.hero.timer=.9*(1.0-float(state[1]))
 			c.pose_sword(c.hero_sword,c.hero,0)
 			c.posture(c.hero,c.hero_stance,-1.0)
 			c.hero_stance.snap()
 			await wait(.12)
+			if c.hero_grip.reach_error>.02: print("reach %s %s %.2f heavy=%s: %.3f m"%[CombatRules.DIRECTIONS[lane],state[0],state[1],state[2],c.hero_grip.reach_error])
 			worst=maxf(worst,c.hero_grip.reach_error)
 	c.hero.phase="idle"
 	c.hero.blocking=false
 	c.hero.guard=0
 	check(worst<.04,"Chambers, cuts and follow-throughs in every lane keep the hands on the grip (worst %.3f m)"%worst)
+	# The fists close across the grip with the thumbs up the blade, and the player's lead hand is
+	# the one on the forehand side: the character's own right, which is the bone named L on this rig.
+	check(c.hero_grip.lead=="L" and c.enemy_grip.lead=="R","The player leads with the hand on his forehand side; the partner mirrors him")
+	c.hero.phase="idle"
+	c.hero.blocking=true
+	c.hero.guard=1
+	c.pose_sword(c.hero_sword,c.hero,0)
+	c.posture(c.hero,c.hero_stance,-1.0)
+	c.hero_stance.snap()
+	await wait(.15)
+	check(c.hero_grip.hand_align>.9 and c.hero_grip.reach_error<.03,"Both fists close across the grip, thumbs up the blade (align %.2f)"%c.hero_grip.hand_align)
+	# Every cover turns an edge, not the flat, toward the cut it answers, and the roof is above the head.
+	var flat_to_cut := 0.0
+	for lane in 4:
+		var cover: Transform3D=CombatChoreo.guard(lane)
+		var from: Vector3=(-CombatChoreo.TRAVEL[lane]+Vector3(0,0,.5)).normalized()
+		flat_to_cut=maxf(flat_to_cut,absf(cover.basis.z.dot(from)))
+	check(flat_to_cut<.4,"Each cover meets its lane's cut edge on (worst flat %.2f)"%flat_to_cut)
+	check(CombatChoreo.guard(0).origin.y>1.70 and CombatChoreo.guard(2).basis.y.y<-.7,"The High cover is a roof above the head and the Low cover a hanging point")
+	# No key parks the grip inside the body: the pommel end of every ready, cover, chamber, strike
+	# and follow-through stays outside the torso and head boxes of the villager rig.
+	var inside := []
+	for lane in 4:
+		var keys := {"guard":CombatChoreo.guard(lane),"chamber":CombatChoreo.chamber(lane,false),"heavy":CombatChoreo.chamber(lane,true),"strike":CombatChoreo.strike(lane,false),"follow":CombatChoreo.follow(lane,false),"ready":CombatChoreo.ready(0.0)}
+		for name in keys:
+			var xf: Transform3D=keys[name]
+			for along in [-.26,-.10,.05,.30]:
+				var point: Vector3=xf.origin+xf.basis.y*along
+				var torso: bool=absf(point.x)<.24 and point.y>.85 and point.y<1.52 and absf(point.z)<.15
+				var head: bool=absf(point.x)<.12 and point.y>=1.52 and point.y<1.87 and point.z>-.12 and point.z<.11
+				if torso or head: inside.append("%s %s %.2f"%[CombatRules.DIRECTIONS[lane],name,along])
+	check(inside.is_empty(),"No authored key runs the grip or blade through the body"+("" if inside.is_empty() else ": "+", ".join(inside)))
+	# A block drives the guard along the cut; a perfect parry beats the blade out against it.
+	c.hero.flash=CombatChoreo.FLASH
+	c.hero.counter=0.0
+	var jolted: Transform3D=CombatChoreo.blade(c.hero,0.0,0.0,0.0).xf
+	c.hero.flash=0.0
+	var settled: Transform3D=CombatChoreo.blade(c.hero,0.0,0.0,0.0).xf
+	c.hero.flash=CombatChoreo.FLASH
+	c.hero.counter=1.0
+	var beaten: Transform3D=CombatChoreo.blade(c.hero,0.0,0.0,0.0).xf
+	c.hero.flash=0.0
+	c.hero.counter=0.0
+	check(jolted.origin.x<settled.origin.x-.05 and jolted.origin.z<settled.origin.z-.05,"A blocked Right cut drives the guard along the cut and back")
+	check(beaten.origin.x>settled.origin.x+.05 and beaten.origin.z>settled.origin.z+.05,"A perfect parry beats the blade out against the cut")
+	# A swing is drawn from wherever the blade was shown last, and a feint re-chambers from its lie.
+	c.hero.blocking=false
+	c.hero.phase="recovery"
+	c.hero.attack_dir=1
+	c.hero.timer=.30
+	c.hero.total=.38
+	c.pose_sword(c.hero_sword,c.hero,0)
+	var shown: Transform3D=c.hero.last_xf
+	c.hero.phase="idle"
+	c.hero.timer=0
+	c.hero.stamina=100
+	c.attack(false)
+	var first: Transform3D=CombatChoreo.blade(c.hero,0.0,0.0,0.0).xf
+	check(c.hero.phase=="windup" and first.origin.distance_to(shown.origin)<.001 and first.basis.y.distance_to(shown.basis.y)<.001,"A swing is drawn from where the blade was shown, not from a fixed start")
+	check(c.feint(c.hero,3,true) and c.hero.from_at==.45 and c.hero.has("from_xf"),"A feint re-chambers from the lie it abandons")
+	c.hero.phase="idle"
+	c.hero.feinted=false
+	c.hero.combo=""
+	c.hero.guard=0
+	c.hero.attack_dir=0
+	await gallery(game,c)
 	c.enemy.position=c.CENTER+Vector3(2.0,.1,.2)
 	c.set_physics_process(true)
 	await wait(.6)
@@ -498,6 +565,19 @@ func run(game: Node) -> void:
 	c.pose_sword(game.camera.get_node("FirstPersonHands/HeldGreatsword"),c.hero,0,true)
 	await wait(.15)
 	await shot("first-person")
+	if DisplayServer.get_name()!="headless":
+		# Every cover, chamber and cut as the player sees it over the blade.
+		var held: Node3D=game.camera.get_node("FirstPersonHands/HeldGreatsword")
+		for key in GALLERY_KEYS:
+			for lane in 4:
+				if key[0]=="ready" and lane>0: continue
+				pose_key(c.hero,key,lane)
+				c.pose_sword(held,c.hero,0,true)
+				await wait(.12)
+				await shot("fp-%s-%s"%[key[0],CombatRules.DIRECTIONS[lane].to_lower()])
+		c.hero.phase="idle"
+		c.hero.blocking=false
+		c.hero.guard=0
 	# Input events use the same routing as actual mouse and keyboard controls.
 	c.hero.phase="idle"
 	c.hero.stamina=100
@@ -554,3 +634,62 @@ func run(game: Node) -> void:
 	await wait(.5)
 	print("COMBAT CHECKS COMPLETE: ",failures," failure(s)")
 	get_tree().quit(1 if failures else 0)
+# Close-ups of every authored key on both rigs, so hands, edges and covers can be eyeballed.
+const GALLERY_KEYS := [["guard","idle",0.0,false,true],["ready","idle",0.0,false,false],["chamber","windup",.56,false,false],["chamber-heavy","windup",.56,true,false],["strike","windup",.995,false,false],["follow","recovery",.15,false,false]]
+func pose_key(f: Dictionary,key: Array,lane: int) -> void:
+	f.phase=key[1]
+	f.attack_dir=lane
+	f.guard=lane
+	f.heavy=key[3]
+	f.blocking=key[4]
+	f.total=1.0
+	f.timer=1.0-float(key[2])
+	f.whiff=false
+	f.bounce=false
+	f.flash=0.0
+	f.raise=0.0
+	f.counter=0.0
+	f.erase("from_xf")
+func gallery(game: Node,c) -> void:
+	if DisplayServer.get_name()=="headless": return
+	var cam := Camera3D.new()
+	cam.fov=36
+	cam.near=.05
+	game.add_child(cam)
+	cam.current=true
+	for who in ["hero","foe"]:
+		var f: Dictionary=c.hero if who=="hero" else c.foe
+		var body: Node3D=game.player if who=="hero" else c.enemy
+		var sword: Node3D=c.hero_sword if who=="hero" else c.enemy_sword
+		var stance=c.hero_stance if who=="hero" else c.enemy_stance
+		var facing: Vector3=(game.player.model if who=="hero" else c.enemy_model).global_basis.z.normalized() # Both rigs face their own +z.
+		var right: Vector3=facing.cross(Vector3.UP)
+		# The other fighter leaves the close-up without either rig turning: the swordsman is hidden
+		# while the player is shot, and the player steps far back behind the camera for the swordsman's turn.
+		var other: Node3D=c.enemy if who=="hero" else game.player
+		var parked: Vector3=other.position
+		if who=="hero": c.enemy.visible=false
+		else: other.position=parked+facing*9.0
+		var views: Array=[["front",facing*1.7+right*1.3+Vector3.UP*1.55]]
+		if who=="hero": views.append(["back",-facing*1.6+right*1.4+Vector3.UP*1.75])
+		for view in views:
+			for key in GALLERY_KEYS:
+				for lane in 4:
+					if key[0]=="ready" and lane>0: continue
+					pose_key(f,key,lane)
+					c.pose_sword(sword,f,0)
+					c.posture(f,stance,-1.0 if who=="hero" else 1.0)
+					stance.snap()
+					cam.global_position=body.position+view[1]
+					cam.look_at(body.position+Vector3.UP*1.15)
+					await wait(.1)
+					await shot("pose-%s-%s-%s-%s"%[who,view[0],key[0],CombatRules.DIRECTIONS[lane].to_lower()])
+		f.phase="idle"
+		f.blocking=false
+		f.guard=0
+		f.attack_dir=0
+		f.heavy=false
+		other.position=parked
+		c.enemy.visible=true
+	cam.queue_free()
+	game.camera.current=true

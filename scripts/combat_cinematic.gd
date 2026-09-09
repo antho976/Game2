@@ -40,7 +40,7 @@ func step(delta: float) -> void:
 	shake=maxf(0,shake-delta*2.5)
 	var u: float=clampf(time/LENGTH,0,1)
 	var clock: float=combat.clock
-	var hero: Dictionary=CombatChoreo.execution(lane,u,clock)
+	var hero: Dictionary=CombatChoreo.execution(lane,u,clock,combat.hero.get("last_xf",Transform3D()))
 	var foe: Dictionary=CombatChoreo.executed(lane,u,clock)
 	if is_instance_valid(combat.hero_sword): combat.apply_blade(combat.hero_sword,hero.xf,60.0,delta,true,false)
 	if is_instance_valid(combat.enemy_sword): combat.apply_blade(combat.enemy_sword,foe.xf,30.0,delta,false,false)
