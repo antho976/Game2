@@ -5,6 +5,7 @@ uniform vec3 ink : source_color = vec3(.036,.034,.033);
 uniform vec3 forge_color : source_color = vec3(.26,.11,.03);
 uniform vec3 window_color : source_color = vec3(.05,.065,.095);
 uniform vec2 forge_at = vec2(1.02,1.06);
+uniform vec2 window_at = vec2(.04,-.05);
 uniform float grain = 1.0;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){
@@ -16,7 +17,7 @@ void fragment(){
 	vec3 col=ink;
 	float d=length((uv-forge_at)*vec2(1.0,1.35));
 	col+=forge_color*exp(-d*d*3.4);
-	float w=length((uv-vec2(.04,-.05))*vec2(1.0,1.25));
+	float w=length((uv-window_at)*vec2(1.0,1.25));
 	col+=window_color*exp(-w*w*3.0);
 	// Laid paper: fine tooth, broad blotches and faint vertical fibres.
 	float tooth=noise(uv*vec2(940.0,540.0));

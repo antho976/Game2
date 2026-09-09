@@ -15,6 +15,7 @@ const FORGE := Color(.95,.55,.24)           # ember
 const BLOOD := Color(.76,.29,.24)           # loss
 const VERDIGRIS := Color(.52,.76,.55)       # gain
 const STEEL := Color(.72,.78,.84)
+const SAPPHIRE := Color(.56,.82,.96)     # cut gems, and anything cold
 
 const RARITY := {
 	"warden":["Common",Color(.80,.79,.74)],
@@ -245,15 +246,104 @@ class Pips extends Control:
 			var line: Color = color.lightened(.2) if i<rank else (Color(color,.55) if next and i==rank else Color(1,.94,.84,.18))
 			draw_polyline(loop,line,1.2,true)
 
-## The page itself, drawn once behind everything.
-static func page(root: Control) -> ColorRect:
+## The page itself, drawn once behind everything. The two lights are the
+## room: a forge low and right, a window high and left, or whatever a
+## given screen keeps for company.
+static func page(root: Control,warm := Color(.26,.11,.03),warm_at := Vector2(1.02,1.06),
+		cold := Color(.05,.065,.095),cold_at := Vector2(.04,-.05)) -> ColorRect:
 	var sheet := ColorRect.new()
-	sheet.material = ShaderMaterial.new()
-	sheet.material.shader = load("res://assets/ui/forge_page.gdshader")
+	var material := ShaderMaterial.new()
+	material.shader = load("res://assets/ui/forge_page.gdshader")
+	material.set_shader_parameter("forge_color",warm)
+	material.set_shader_parameter("forge_at",warm_at)
+	material.set_shader_parameter("window_color",cold)
+	material.set_shader_parameter("window_at",cold_at)
+	sheet.material = material
 	sheet.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(sheet)
 	return sheet
+
+## A screen's name, its rubric, and room on the right for counters and the
+## way out. Follow it with a rule.
+static func header(parent: Node,name: String,rubric: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",16)
+	parent.add_child(row)
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation",2)
+	row.add_child(box)
+	title(box,name,34,GILT,3.0)
+	caps(box,rubric,11,FADED,5.0)
+	return row
+
+## A tally in a tinted plate: an optional drawn mark, an optional rubric,
+## and the figure the caller keeps writing into.
+static func counter(parent: Node,mark: Control,color: Color,rubric := "") -> Label:
+	var holder := panel(parent,plate_box(Color(color.r,color.g,color.b,.17),
+		Color(color.r,color.g,color.b,.07),Color(color.r,color.g,color.b,.55),Vector2(14,7),7.0))
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",8)
+	holder.add_child(row)
+	if mark != null:
+		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(mark)
+	if not rubric.is_empty():
+		caps(row,rubric,11,FADED,3.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return number(row,"",19,color.lightened(.25))
+
+## Tabs with a gilt marker that slides to whichever one is open.
+class TabStrip extends Control:
+	var row: HBoxContainer
+	var marker: ColorRect
+	var buttons: Array[Button] = []
+	func _init() -> void:
+		custom_minimum_size.y = 44
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row = HBoxContainer.new()
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.add_theme_constant_override("separation",6)
+		add_child(row)
+		marker = ColorRect.new()
+		marker.color = ForgeUi.GILT
+		marker.size = Vector2(0,2)
+		marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(marker)
+	func add(label: String,callback: Callable,size := 15) -> Button:
+		var button := Button.new()
+		button.text = label
+		button.add_theme_font_override("font",ForgeUi.tracked(2.0,false))
+		button.add_theme_font_size_override("font_size",size)
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(callback)
+		ForgeUi.sound(button)
+		for state in ["normal","hover","pressed","focus"]:
+			var lit: bool = state=="hover"
+			button.add_theme_stylebox_override(state,ForgeUi.plate_box(
+				Color(1,.92,.80,.05 if lit else 0),Color(1,.92,.80,.02 if lit else 0),
+				Color(0,0,0,0),Vector2(13,9),6.0))
+		row.add_child(button)
+		buttons.append(button)
+		return button
+	func mark(index: int) -> void:
+		for i in buttons.size():
+			var on: bool = i==index
+			buttons[i].add_theme_color_override("font_color",ForgeUi.GILT if on else ForgeUi.FADED)
+			buttons[i].add_theme_color_override("font_hover_color",ForgeUi.GILT if on else ForgeUi.VELLUM)
+			buttons[i].add_theme_color_override("font_pressed_color",ForgeUi.GILT)
+		custom_minimum_size.x = row.get_combined_minimum_size().x
+		var current: Button = buttons[clampi(index,0,buttons.size()-1)]
+		if current.size.x<=0.0: return
+		var target := Rect2(current.position.x+10,current.size.y-4,current.size.x-20,2)
+		if marker.size.x<=0.0:
+			marker.position = target.position
+			marker.size = target.size
+			return
+		var slide := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		slide.tween_property(marker,"position",target.position,.18)
+		slide.tween_property(marker,"size",target.size,.18)
 
 # ---------------------------------------------------------------- controls
 
@@ -319,6 +409,19 @@ static func tag(parent: Node,label: String,color: Color,strong := false) -> Pane
 	var node := caps(holder,label,11,color,3.0)
 	node.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return holder
+
+## Scrollbars: an ink channel with a gilt thumb, not the engine default.
+static func style_scroll(scroll: ScrollContainer) -> void:
+	scroll.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+	var bar := scroll.get_v_scroll_bar()
+	bar.add_theme_stylebox_override("scroll",plate_box(Color(0,0,0,.35),Color(0,0,0,.35),Color(1,.94,.84,.05),Vector2(3,0),0.0))
+	for state in ["grabber","grabber_highlight","grabber_pressed"]:
+		var lit: bool = state!="grabber"
+		bar.add_theme_stylebox_override(state,plate_box(
+			Color(GILT.r,GILT.g,GILT.b,.55 if lit else .30),
+			Color(GILT.r,GILT.g,GILT.b,.35 if lit else .18),
+			Color(GILT.r,GILT.g,GILT.b,.5 if lit else .22),Vector2(3,0),3.0))
+	bar.custom_minimum_size.x = 9
 
 static func rule(parent: Node,pip := true,color := Color(GILT.r,GILT.g,GILT.b,.42)) -> Rule:
 	var node := Rule.new()

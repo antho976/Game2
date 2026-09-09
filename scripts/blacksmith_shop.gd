@@ -14,10 +14,8 @@ var balance: Label
 var level_label: Label
 var status: Label
 var status_dot: ColorRect
-var tabs: HBoxContainer
-var tabs_holder: Control
-var tab_buttons := {}
-var tab_marker: ColorRect
+var tabs: ForgeUi.TabStrip
+var tab_order: Array[String] = []
 var filters: HBoxContainer
 var filter_buttons := {}
 var preview: Node3D
@@ -105,33 +103,12 @@ func _ready() -> void:
 # ---------------------------------------------------------------- chrome
 
 func build_header(body: Node) -> void:
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation",16)
-	body.add_child(header)
-	var title_box := VBoxContainer.new()
-	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_box.add_theme_constant_override("separation",2)
-	header.add_child(title_box)
-	ForgeUi.title(title_box,"The Blacksmith",34,GILT,3.0)
-	ForgeUi.caps(title_box,"Forge and armoury",11,FADED,5.0)
-	var purse := ForgeUi.panel(header,ForgeUi.plate_box(Color(.20,.15,.06,.85),Color(.10,.075,.03,.9),Color(GILT.r,GILT.g,GILT.b,.55),Vector2(14,7),7.0))
-	purse.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var purse_row := HBoxContainer.new()
-	purse_row.add_theme_constant_override("separation",9)
-	purse.add_child(purse_row)
+	var header := ForgeUi.header(body,"The Blacksmith","Forge and armoury")
 	var coin := GearIcon.new()
 	coin.slot = "coin"
 	coin.custom_minimum_size = Vector2(19,19)
-	coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	purse_row.add_child(coin)
-	balance = ForgeUi.number(purse_row,"0",19,GILT.lightened(.25))
-	var level_plate := ForgeUi.panel(header,ForgeUi.plate_box(Color(.13,.13,.12,.85),Color(.07,.07,.065,.9),Color(1,.95,.85,.16),Vector2(14,7),7.0))
-	level_plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var level_row := HBoxContainer.new()
-	level_row.add_theme_constant_override("separation",8)
-	level_plate.add_child(level_row)
-	ForgeUi.caps(level_row,"Level",11,FADED,3.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	level_label = ForgeUi.number(level_row,"1",19,VELLUM)
+	balance = ForgeUi.counter(header,coin,GILT)
+	level_label = ForgeUi.counter(header,null,Color(.78,.76,.71),"Level")
 	var leave := ForgeUi.button(header,"Leave  ·  Esc",close,false,"ghost",14)
 	leave.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ForgeUi.rule(body)
@@ -140,32 +117,11 @@ func build_nav(body: Node) -> void:
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation",12)
 	body.add_child(nav)
-	# The tabs live in a plain Control so the gilt marker can slide between them.
-	tabs_holder = Control.new()
-	tabs_holder.custom_minimum_size.y = 44
-	tabs_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nav.add_child(tabs_holder)
-	tabs = HBoxContainer.new()
-	tabs.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tabs.add_theme_constant_override("separation",6)
-	tabs_holder.add_child(tabs)
-	tab_marker = ColorRect.new()
-	tab_marker.color = GILT
-	tab_marker.size = Vector2(0,2)
-	tab_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tabs_holder.add_child(tab_marker)
+	tabs = ForgeUi.TabStrip.new()
+	nav.add_child(tabs)
 	for tab in [["stock","Buy equipment"],["owned","Your equipment"],["upgrade","The anvil"]]:
-		var button := Button.new()
-		button.text = tab[1]
-		button.add_theme_font_override("font",ForgeUi.tracked(2.0,false))
-		button.add_theme_font_size_override("font_size",15)
-		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func(): page=tab[0]; selected_uid=0; refresh())
-		ForgeUi.sound(button)
-		for state in ["normal","hover","pressed","focus"]:
-			button.add_theme_stylebox_override(state,ForgeUi.plate_box(Color(1,.92,.80,.05 if state=="hover" else 0),Color(1,.92,.80,.02 if state=="hover" else 0),Color(0,0,0,0),Vector2(13,9),6.0))
-		tabs.add_child(button)
-		tab_buttons[tab[0]] = button
+		tabs.add(tab[1],func(): page=tab[0]; selected_uid=0; refresh())
+		tab_order.append(tab[0])
 	filters = HBoxContainer.new()
 	filters.add_theme_constant_override("separation",6)
 	filters.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -192,8 +148,7 @@ func build_columns(body: Node) -> void:
 	rows_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows_scroll.size_flags_stretch_ratio = 1.35
 	rows_scroll.custom_minimum_size.x = 300
-	rows_scroll.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-	style_scrollbar(rows_scroll)
+	ForgeUi.style_scroll(rows_scroll)
 	columns.add_child(rows_scroll)
 	var rack_margin := MarginContainer.new()
 	rack_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -223,7 +178,7 @@ func build_columns(body: Node) -> void:
 	var detail_scroll := ScrollContainer.new()
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	style_scrollbar(detail_scroll)
+	ForgeUi.style_scroll(detail_scroll)
 	stack.add_child(detail_scroll)
 	detail = VBoxContainer.new()
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -331,17 +286,6 @@ func build_fitting_room(viewport: SubViewport) -> void:
 
 # ---------------------------------------------------------------- lifecycle
 
-func style_scrollbar(scroll: ScrollContainer) -> void:
-	var bar := scroll.get_v_scroll_bar()
-	bar.add_theme_stylebox_override("scroll",ForgeUi.plate_box(Color(0,0,0,.35),Color(0,0,0,.35),Color(1,.94,.84,.05),Vector2(3,0),0.0))
-	for state in ["grabber","grabber_highlight","grabber_pressed"]:
-		var lit: bool = state!="grabber"
-		bar.add_theme_stylebox_override(state,ForgeUi.plate_box(
-			Color(GILT.r,GILT.g,GILT.b,.55 if lit else .30),
-			Color(GILT.r,GILT.g,GILT.b,.35 if lit else .18),
-			Color(GILT.r,GILT.g,GILT.b,.5 if lit else .22),Vector2(3,0),3.0))
-	bar.custom_minimum_size.x = 9
-
 func fit_columns() -> void:
 	if is_instance_valid(rows): rows.columns = clampi(int((rows_scroll.size.x+12)/172),2,4)
 func clear(parent: Node) -> void:
@@ -423,23 +367,7 @@ func item_art(def: Dictionary,extent: float,dim: bool) -> Control:
 	return icon
 
 func style_nav() -> void:
-	for id in tab_buttons:
-		var button: Button = tab_buttons[id]
-		var on: bool = id==page
-		button.add_theme_color_override("font_color",GILT if on else FADED)
-		button.add_theme_color_override("font_hover_color",GILT if on else VELLUM)
-		button.add_theme_color_override("font_pressed_color",GILT)
-	tabs_holder.custom_minimum_size.x = tabs.get_combined_minimum_size().x
-	var current: Button = tab_buttons[page]
-	if current.size.x>0.0:
-		var target := Rect2(current.position.x+10,current.size.y-4,current.size.x-20,2)
-		if tab_marker.size.x<=0.0:
-			tab_marker.position = target.position
-			tab_marker.size = target.size
-		else:
-			var slide := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-			slide.tween_property(tab_marker,"position",target.position,.18)
-			slide.tween_property(tab_marker,"size",target.size,.18)
+	tabs.mark(tab_order.find(page))
 	for slot in filter_buttons:
 		var button: Button = filter_buttons[slot]
 		var on: bool = slot==filter_slot
@@ -607,8 +535,9 @@ func item_header(def: Dictionary,rank: int) -> void:
 	ForgeUi.spacer(text,2)
 	var name := ForgeUi.title(text,def.name+(" +%d"%rank if rank>0 else ""),22,tint.lightened(.12),1.0)
 	name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var chips := HBoxContainer.new()
-	chips.add_theme_constant_override("separation",6)
+	var chips := HFlowContainer.new()
+	chips.add_theme_constant_override("h_separation",6)
+	chips.add_theme_constant_override("v_separation",5)
 	text.add_child(chips)
 	ForgeUi.tag(chips,tier[0],tint,true)
 	ForgeUi.tag(chips,SLOT_SINGULAR[def.slot],FADED,false)
