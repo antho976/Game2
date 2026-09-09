@@ -276,6 +276,11 @@ func update_camera(delta: float) -> void:
 		player.model.visible=player.visible
 		return
 	var title: bool = menus != null and menus.home
+	if is_instance_valid(combat) and combat.cinematic.active():
+		# The execution frames itself; the player's own body is in the shot.
+		player.model.visible = true
+		combat.cinematic.place_camera(camera,delta)
+		return
 	player.model.visible = (camera_mode!=1 and not inside_school()) or title or overview
 	if title or overview:
 		if title: yaw += delta*.055
@@ -317,7 +322,7 @@ func update_interaction() -> void:
 	nearest = ""
 	if is_instance_valid(combat) and (combat.active or player.position.distance_to(combat.CENTER)<4.5):
 		nearest="sparring"
-		prompt.text="F  ·  End sparring" if combat.active else "F  ·  Spar with the swordsman     K  ·  Combat skills"
+		prompt.text="F  ·  Yield" if combat.active else "F  ·  Challenge the swordsman     K  ·  Combat skills"
 		return
 	if inside_school():
 		if player.position.distance_to(school.teacher.global_position)<2.8:

@@ -16,9 +16,11 @@ func run(game: Node) -> void:
 	game.menus.release_classroom()
 	game.menus.story_stage="done"
 	var c=game.combat
+	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	c.start()
 	c.set_physics_process(false)
 	check(c.active and game.equipment.inventory.is_empty(),"Practice loan starts combat without adding inventory")
+	check(c.armed and is_instance_valid(c.hero_sword) and c.fight_time==0,"The bout begins where the player stands with the sword drawn and no salute")
 	for direction in 4:
 		check(CombatRules.defence(direction,direction,true,.1,0,18)=="perfect","Matching timely guard works in lane "+str(direction))
 		check(CombatRules.defence(direction,(direction+1)%4,true,.1,100,18)=="hit","Wrong direction never blocks")
@@ -40,7 +42,39 @@ func run(game: Node) -> void:
 	c.foe.attack_dir=1
 	var stamina: float=c.hero.stamina
 	check(c.resolve_hit(false)=="perfect" and c.hero.stamina==stamina,"Perfect block costs zero stamina")
-	check(c.foe.timer>=1 and c.foe.exhaust==38 and c.hero.counter>0,"Perfect block opens counter window and builds exhaustion")
+	check(c.foe.phase=="open" and c.foe.guard==1 and is_equal_approx(c.foe.open,1.3) and c.foe.exhaust==38 and c.hero.counter>0,"A perfect parry freezes the swordsman's guard in the parried lane for 1.3 seconds and fills the stagger bar")
+	c.hero.phase="windup"
+	c.hero.attack_dir=1
+	c.hero.heavy=false
+	c.hero.critical=false
+	c.hero.combo=""
+	c.hero.chain.clear()
+	var frozen_health: float=c.foe.health
+	check(c.resolve_hit(true)=="block" and c.foe.health==frozen_health and c.foe.phase=="open","Striking the lane his stuck blade covers is still blocked")
+	c.hero.phase="windup"
+	c.hero.attack_dir=3
+	check(c.resolve_hit(true)=="hit" and c.foe.health<frozen_health and c.foe.phase=="hurt","Striking any other lane while he is open lands")
+	check(c.last_result=="hit" and frozen_health-c.foe.health>float(GearCatalog.find("warden_blade").damage)*1.2,"An open fighter takes bonus damage")
+	c.hitstop=0
+	c.foe.phase="open"
+	c.foe.timer=.1
+	c.foe.total=1.3
+	c.tick(c.foe,.2,false)
+	check(c.foe.phase=="idle" and c.foe.blocking and c.foe.open==0,"The frozen guard comes free when the opening ends")
+	# Tiers: a recruit stays open longer, a master never opens and only builds stagger.
+	check(CombatRules.partner(1,"grunt").open_time>CombatRules.partner(1,"normal").open_time and CombatRules.partner(1,"boss").open_time==0,"Openings shorten with enemy tier, not level")
+	c.tier="boss"
+	c.profile=CombatRules.partner(1,"boss")
+	c.hero.phase="idle"
+	c.hero.blocking=true
+	c.hero.guard=0
+	c.hero.block_age=.1
+	c.foe.phase="windup"
+	c.foe.attack_dir=0
+	c.foe.exhaust=0
+	check(c.resolve_hit(false)=="perfect" and c.foe.phase=="recovery" and c.foe.exhaust==48,"A perfect parry never opens a master but fills his stagger bar faster")
+	c.tier="normal"
+	c.profile=CombatRules.partner(1,"normal")
 	c.foe.phase="idle"
 	c.foe.blocking=true
 	c.foe.guard=3
@@ -67,8 +101,42 @@ func run(game: Node) -> void:
 	c.hero.guard=2
 	c.hero.block_age=.1
 	c.foe.exhaust=80
+	c.foe.phase="windup"
 	c.resolve_hit(false)
-	check(c.foe.phase=="exhausted" and c.foe.timer==3,"Repeated parries exhaust the attacker")
+	check(c.foe.phase=="exhausted" and c.foe.timer==3 and c.foe.weak>=0 and c.foe.weak<4 and c.weak_marker.visible,"A full stagger bar exhausts him and shows a weak spot")
+	c.hitstop=0
+	c.hero.phase="windup"
+	c.hero.heavy=true
+	c.hero.critical=false
+	c.hero.pursuit=false
+	c.hero.combo=""
+	c.hero.chain.clear()
+	c.hero.attack_dir=(c.foe.weak+1)%4
+	c.foe.health=140
+	var spent_health: float=c.foe.health
+	check(c.resolve_hit(true)=="hit" and c.foe.phase=="exhausted" and c.foe.health<spent_health,"A heavy into the wrong lane only wounds an exhausted fighter and leaves him exhausted")
+	c.hitstop=0
+	c.hero.phase="windup"
+	c.hero.attack_dir=c.foe.weak
+	c.foe.health=400
+	spent_health=c.foe.health
+	check(c.resolve_hit(true)=="execution" and c.cinematic.active() and c.hero.phase=="cinematic" and c.foe.phase=="cinematic","A heavy through the weak spot starts the execution cinematic")
+	check(c.movement(Vector3.FORWARD,2)==Vector3.ZERO and not c.attack(false),"Nobody moves or swings during the execution")
+	c.cinematic.time=c.cinematic.LENGTH*c.cinematic.LAND
+	c.cinematic.step(.02)
+	check(c.cinematic.landed and spent_health-c.foe.health>float(GearCatalog.find("warden_blade").damage)*1.65*2.5,"The execution lands for several times a heavy cut")
+	c.cinematic.time=c.cinematic.LENGTH
+	c.cinematic.step(.02)
+	check(not c.cinematic.active() and c.foe.phase=="idle" and c.foe.exhaust==0 and c.foe.weak==-1 and not c.weak_marker.visible and c.hero.phase=="recovery","After the execution both fighters are let go and the mark is gone")
+	c.hitstop=0
+	c.foe.phase="exhausted"
+	c.foe.timer=.05
+	c.foe.total=3
+	c.foe.weak=2
+	c.weak_marker.show()
+	c.tick(c.foe,.1,false)
+	check(c.foe.phase=="idle" and c.foe.weak==-1 and not c.weak_marker.visible,"Missing the window lets him recover")
+	c.hero.heavy=false
 	c.foe.phase="idle"
 	c.foe.blocking=false
 	c.foe.health=1
@@ -225,9 +293,36 @@ func run(game: Node) -> void:
 	c.guard_held=false
 	c.hero.blocking=false
 	check(CombatRules.partner(1).feint_chance==0 and CombatRules.partner(4).read_chance>CombatRules.partner(1).read_chance and CombatRules.partner(1).health==140,"The partner grows sharper with the player's level")
-	check(c.salute<=0 or c.fight_time==0,"The bout opens with a salute before the partner attacks")
+	# Engagement: no transition. A swing near him starts the bout mid-cut; walking up to him does too.
+	c.stop("Visual check")
+	game.player.position=c.CENTER+Vector3(0,.1,7)
+	c.set_physics_process(true)
+	await wait(2.4)
+	c.set_physics_process(false)
+	c.respawn=0
+	c.truce=0
+	check(not c.armed and not is_instance_valid(c.hero_sword),"The sword goes back on the shoulder after a bout")
+	game.player.position=c.CENTER+Vector3(0,.1,7)
+	check(c.attack(false) and c.armed and not c.active and c.hero.phase=="windup","A swing thrown away from him draws the sword without starting a bout")
+	c.hero.phase="idle"
+	c.sheathe()
+	game.player.position=c.CENTER+Vector3(0,.1,1.6)
+	check(c.attack(false) and c.active and c.hero.phase=="windup" and c.hero.stamina<c.hero.max_stamina,"A swing thrown near him starts the bout with that swing already in the air")
+	c.stop("Sight check")
+	c.respawn=0
+	c.truce=0
+	c.sheathe()
+	game.player.position=c.CENTER+Vector3(0,.1,6.5)
+	c.set_physics_process(true)
+	await wait(.5)
+	check(not c.active,"He does not square up while the player keeps their distance")
+	game.player.position=c.CENTER+Vector3(0,.1,2.5)
+	await wait(1.2)
+	c.set_physics_process(false)
+	check(c.active and c.fight_time>0 and c.armed,"He squares up the moment he sees the player and the bout is on")
 	c.stop("Visual check")
 	c.respawn=0
+	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	c.start()
 	game.camera_mode=2
 	game.camera_distance=4.2
@@ -242,20 +337,130 @@ func run(game: Node) -> void:
 	c.pose_sword(c.enemy_sword,c.foe,0)
 	c.pose_sword(c.hero_sword,c.hero,0)
 	await shot("stance")
+	c.foe.phase="open"
+	c.foe.attack_dir=1
+	c.foe.guard=1
+	c.foe.open=1.0
+	c.foe.open_total=1.3
+	c.foe.timer=1.0
+	c.foe.total=1.3
+	c.hero.phase="windup"
+	c.hero.attack_dir=3
+	c.hero.total=1.0
+	c.hero.timer=.05
+	c.pose_sword(c.enemy_sword,c.foe,0)
+	c.pose_sword(c.hero_sword,c.hero,0)
+	await wait(.1)
+	await shot("open")
+	c.foe.phase="exhausted"
+	c.foe.timer=2.0
+	c.foe.total=3.0
+	c.foe.weak=0
+	c.foe.exhaust=100
+	c.weak_marker.position=c.WEAK_SPOT[0]
+	c.weak_marker.show()
+	c.hero.phase="idle"
+	c.hero.blocking=true
+	c.hero.guard=0
+	c.pose_sword(c.enemy_sword,c.foe,0)
+	c.pose_sword(c.hero_sword,c.hero,0)
+	await wait(.1)
+	await shot("exhausted")
+	c.weak_marker.hide()
+	c.foe.exhaust=0
+	c.hero.blocking=false
+	# Side view of both cuts: his heavy chambered high, the player's rising cut at contact.
+	game.yaw=PI/2
+	game.camera_distance=3.6
+	game.camera_height=1.3
+	game.camera_target=(game.player.position+c.enemy.position)*.5
+	c.foe.phase="windup"
+	c.foe.attack_dir=0
+	c.foe.heavy=true
+	c.foe.total=1.0
+	c.foe.timer=.45
+	c.hero.phase="windup"
+	c.hero.attack_dir=2
+	c.hero.heavy=false
+	c.hero.total=1.0
+	c.hero.timer=.02
+	for i in 3:
+		c.pose_sword(c.enemy_sword,c.foe,0)
+		c.pose_sword(c.hero_sword,c.hero,0)
+		c.posture(c.hero,c.hero_stance,-1.0)
+		c.posture(c.foe,c.enemy_stance,1.0)
+		c.hero_stance.snap()
+		c.enemy_stance.snap()
+		await wait(.1)
+	await shot("side-cuts")
+	# The execution, mid wind-up and at the moment the edge lands.
+	c.foe.phase="exhausted"
+	c.foe.weak=1
+	c.foe.timer=2.0
+	c.foe.total=3.0
+	c.foe.health=400
+	c.hero.phase="windup"
+	c.hero.heavy=true
+	c.hero.attack_dir=1
+	c.hero.critical=false
+	c.hero.combo=""
+	c.resolve_hit(true)
+	c.cinematic.time=c.cinematic.LENGTH*.30
+	for i in 4:
+		c.cinematic.step(.01)
+		await wait(.08)
+	await shot("execution-wind")
+	c.cinematic.time=c.cinematic.LENGTH*.57
+	for i in 4:
+		c.cinematic.step(.01)
+		await wait(.08)
+	await shot("execution-hit")
+	c.cinematic.time=c.cinematic.LENGTH
+	c.cinematic.step(.01)
+	c.hitstop=0
+	c.hero.phase="idle"
+	c.foe.phase="idle"
+	game.yaw=0
+	game.camera_height=2.5
+	game.camera_distance=4.2
 	# Lanes are read from the player's side: a Right guard sits on screen right for both fighters.
 	c.foe.phase="idle"
 	c.foe.guard=1
+	c.foe.blocking=true
 	c.hero.phase="idle"
 	c.hero.guard=1
+	c.hero.blocking=true
 	c.pose_sword(c.enemy_sword,c.foe,0)
 	c.pose_sword(c.hero_sword,c.hero,0)
-	check(c.hero_sword.global_position.x>game.player.position.x+.2 and c.enemy_sword.global_position.x>c.enemy.position.x+.2,"Right-lane guards sit on the player's right for both fighters")
+	var hero_tip: Vector3=c.hero_sword.to_global(Vector3(0,1.25,0))
+	var foe_tip: Vector3=c.enemy_sword.to_global(Vector3(0,1.25,0))
+	check(hero_tip.x>game.player.position.x+.3 and foe_tip.x>c.enemy.position.x+.3,"Right-lane guards raise the blade on the player's right for both fighters")
 	check(is_instance_valid(c.hero_stance) and is_instance_valid(c.hero_grip) and c.hero_stance.get_index()<c.hero_grip.get_index(),"Posture is layered before the grip solve on the player rig")
 	c.hero.guard=0
 	c.pose_sword(c.hero_sword,c.hero,0)
 	await wait(.2)
 	# Modifier results are restored after each skeleton update, so the solver reports its own reach.
 	check(c.hero_grip.reach_error<.03,"The hands stay on the grip through the posture layer")
+	# Every authored key keeps both hands on the grip: chamber, strike and follow-through in each lane.
+	var worst := 0.0
+	for lane in 4:
+		for state in [["windup",.55,false],["windup",.99,true],["recovery",.15,true],["recovery",.15,false],["idle",0.0,false]]:
+			c.hero.phase=state[0]
+			c.hero.attack_dir=lane
+			c.hero.guard=lane
+			c.hero.heavy=state[2]
+			c.hero.blocking=state[0]=="idle"
+			c.hero.total=.9
+			c.hero.timer=.9*(1.0-float(state[1]))
+			c.pose_sword(c.hero_sword,c.hero,0)
+			c.posture(c.hero,c.hero_stance,-1.0)
+			c.hero_stance.snap()
+			await wait(.12)
+			worst=maxf(worst,c.hero_grip.reach_error)
+	c.hero.phase="idle"
+	c.hero.blocking=false
+	c.hero.guard=0
+	check(worst<.04,"Chambers, cuts and follow-throughs in every lane keep the hands on the grip (worst %.3f m)"%worst)
 	c.enemy.position=c.CENTER+Vector3(2.0,.1,.2)
 	c.set_physics_process(true)
 	await wait(.6)

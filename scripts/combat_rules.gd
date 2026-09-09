@@ -11,13 +11,27 @@ const PULL_LIMIT := .45 # Fraction of the windup during which a swing can still 
 const CLASH_LIMIT := .50 # A defender this far into their own swing meets the attack blade on blade.
 const INTERRUPT_LIMIT := .40 # A light hit stops a swing that has not yet reached this point.
 const WINDED := .20 # Fraction of maximum stamina below which a fighter is winded.
+const OPEN_BONUS := 1.25 # Damage on a fighter whose guard is frozen, struck anywhere but the frozen lane.
+const EXHAUST_WINDOW := 3.0 # Seconds an exhausted fighter stays open before he gathers himself.
+const EXECUTION := 3.0 # A heavy into the weak spot of an exhausted fighter deals this many times a heavy cut.
+# Enemy tiers. A perfect parry freezes a grunt's guard for a long moment and a swordsman's for a
+# shorter one; a master never loses his guard, so parries against him only fill the stagger bar.
+static func tiers() -> Dictionary:
+	return {
+		"grunt":{"title":"Recruit","open_time":2.4,"parry_stagger":30.0,"health":.72,"damage":.7,"rank":-1},
+		"normal":{"title":"Swordsman","open_time":1.3,"parry_stagger":38.0,"health":1.0,"damage":1.0,"rank":0},
+		"boss":{"title":"Master","open_time":0.0,"parry_stagger":48.0,"health":1.8,"damage":1.35,"rank":2}}
+static func tier(id: String) -> Dictionary: return tiers().get(id,tiers().normal)
+# What a strike meets on a fighter whose guard is frozen where it was parried.
+static func open_defence(attack_direction: int,guard: int) -> String:
+	return "block" if attack_direction==guard else "hit"
 static func opposite(direction: int) -> int: return (direction+2)%4
 static func defence(attack_direction: int,guard: int,blocking: bool,age: float,stamina: float,cost: float) -> String:
 	if not blocking or attack_direction!=guard: return "hit"
 	if age<=PERFECT_WINDOW: return "perfect"
 	return "block" if stamina>=cost else "break"
 static func state(health: float,stamina: float) -> Dictionary:
-	return {"health":health,"max_health":health,"stamina":stamina,"max_stamina":stamina,"guard":0,"blocking":false,"block_age":99.0,"phase":"idle","timer":0.0,"total":1.0,"attack_dir":0,"heavy":false,"exhaust":0.0,"regen_delay":0.0,"counter":0.0,"counter_dir":0,"critical":false,"pursuit":false,"riposte":false,"feinted":false,"feint_at":-1.0,"chain":[],"chain_time":0.0,"combo":"","whiff":false,"pain":0.0,"flash":0.0,"damage_taken":0.0,"read_timer":-1.0,"parry_ready":false,"followup":false,"resting":false,"strafe":1.0,"strafe_time":0.0}
+	return {"health":health,"max_health":health,"stamina":stamina,"max_stamina":stamina,"guard":0,"blocking":false,"block_age":99.0,"phase":"idle","timer":0.0,"total":1.0,"attack_dir":0,"heavy":false,"exhaust":0.0,"regen_delay":0.0,"counter":0.0,"counter_dir":0,"critical":false,"pursuit":false,"riposte":false,"feinted":false,"feint_at":-1.0,"chain":[],"chain_time":0.0,"combo":"","whiff":false,"pain":0.0,"flash":0.0,"damage_taken":0.0,"read_timer":-1.0,"parry_ready":false,"followup":false,"resting":false,"strafe":1.0,"strafe_time":0.0,"open":0.0,"weak":-1,"staggered":false,"knock":Vector3.ZERO,"raise":0.0}
 static func xp_needed(level: int) -> int: return 100+(level-1)*40
 # Is a fighter's swing still early enough to feint or pull?
 static func progress(fighter: Dictionary) -> float:
@@ -62,11 +76,16 @@ static func combo_progress(chain: Array) -> Dictionary:
 				break
 	return best
 # The sparring partner grows with the player, but stays readable at every level.
-static func partner(level: int) -> Dictionary:
-	var rank: int=maxi(0,level-1)
+static func partner(level: int,tier_id := "normal") -> Dictionary:
+	var kind: Dictionary=tier(tier_id)
+	var rank: int=maxi(0,level-1+int(kind.rank))
 	return {
-		"health":140.0+rank*12,
-		"damage":18.0+rank*1.2,
+		"tier":tier_id,
+		"title":kind.title,
+		"open_time":float(kind.open_time),
+		"parry_stagger":float(kind.parry_stagger),
+		"health":(140.0+rank*12)*float(kind.health),
+		"damage":(18.0+rank*1.2)*float(kind.damage),
 		"read_delay_min":maxf(.10,.16-rank*.015),
 		"read_delay_max":maxf(.18,.34-rank*.02),
 		"read_chance":minf(.85,.40+rank*.08),
