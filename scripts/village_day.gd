@@ -23,7 +23,7 @@ func build() -> void:
 	for child in game.kit.get_children():
 		if child is OmniLight3D and child != game.kit.forge_light: lamps.append(child)
 	clock_label = game.label("",14,Color(.87,.85,.74),Vector2(30,74))
-	var doors := [Vector3(-7.15,0,-7.4),Vector3(3.95,0,-9.5),Vector3(12.85,0,-8.8),Vector3(-13.75,0,-4.0)]
+	var doors := [Vector3(-7.15,0,-7.4),Vector3(12.85,0,-8.8),Vector3(12.85,0,-8.8),Vector3(-13.75,0,-4.0)]
 	var plans := [["work","talk_a","work","work"],["work","talk_b","work","work"],["garden","water","garden","ducks"],["water","cats","talk_a","birds"],["talk_b","ducks","water","cats"],["birds","talk_b","cats","water"]]
 	for i in game.kit.npcs.size():
 		var person: HubNPC = game.kit.npcs[i]

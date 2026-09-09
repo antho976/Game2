@@ -42,10 +42,11 @@ func build(hub: HubKit) -> void:
 			shape(self,p+Vector3(0,.09,0),Vector3(.2,.18,.28)*rng.randf_range(.7,1.8),Color(.40,.43,.35))
 		else:
 			flowers(p,i)
-	for p in [Vector3(-17,0,4),Vector3(-7,0,11),Vector3(15,0,9),Vector3(16,0,-5),Vector3(8,0,-14)]:
+	for p in [Vector3(-17,0,4),Vector3(-7,0,11),Vector3(15,0,9),Vector3(16,0,-5),Vector3(10.6,0,-14)]:
 		flowers(p,int(absf(p.x)))
 
 func plant_tree(p: Vector3, size: float, index: int) -> void:
+	if absf(p.x-4.6)<7 and absf(p.z+12.2)<6: return
 	p.y = terrain_height(p)
 	var tree := kit.asset("birch_tree" if index % 4 == 0 else "oak_tree",p)
 	tree.rotation.y = rng.randf()*TAU
@@ -59,6 +60,7 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 		kit.world.block(p+Vector3(0,1,0),Vector3(.65,2,.65)*size)
 
 func plantable(p: Vector3) -> bool:
+	if absf(p.x-4.6)<5.5 and absf(p.z+12.2)<5.3: return false
 	if outside_water(p): return false
 	if absf(p.x+9.1)<1.8 and absf(p.z-8.2)<1.2: return false
 	for center in hamlet_centers:

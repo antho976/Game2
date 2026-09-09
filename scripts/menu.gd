@@ -18,6 +18,8 @@ var panel: PanelContainer
 var fps_label: Label
 var fps_clock := 0.0
 var intro: Control
+var classroom: Control
+var story_stage := "done"
 
 func _ready() -> void:
 	layer = 10
@@ -130,7 +132,15 @@ func open() -> void:
 	game.ui.hide()
 	root.show()
 
+func release_classroom() -> void:
+	if not is_instance_valid(classroom): return
+	classroom.get_parent().queue_free()
+	classroom=null
+	game.player.show()
+	game.camera.make_current()
+
 func show_home() -> void:
+	release_classroom()
 	home = true
 	open()
 	clear("The village", "A quiet place to return to.")
@@ -178,7 +188,8 @@ func reset_player(pos: Vector3) -> void:
 	game.camera_target = pos
 
 func new_game() -> void:
-	if is_instance_valid(intro): return
+	if is_instance_valid(intro) or (is_instance_valid(classroom) and classroom.active): return
+	release_classroom()
 	if is_instance_valid(game.research_menu):
 		game.research_menu.toast_time=0
 		game.research_menu.toast_panel.hide()
@@ -189,6 +200,7 @@ func new_game() -> void:
 	game.village_day.clock = 270.0
 	for animal in game.kit.life.animals:
 		if animal.kind == "cat": animal.pets = 0
+	story_stage = "cinematic"
 	resume()
 	save_game()
 	play_intro()
@@ -203,14 +215,39 @@ func play_intro() -> void:
 	game.add_child(overlay)
 	intro = load("res://assets/cinematic/cinematic.gd").new()
 	intro.finished.connect(func():
-		get_tree().paused = false
 		intro = null
 		overlay.queue_free()
-		resume()
+		play_classroom()
 	)
 	overlay.add_child(intro)
 	intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	get_tree().paused = true
+
+func play_classroom(lesson := true) -> void:
+	if is_instance_valid(classroom): return
+	if lesson: story_stage = "classroom"
+	save_game()
+	game.input_blocked = true
+	game.ui.hide()
+	game.sync_camera_mouse()
+	var overlay := CanvasLayer.new()
+	overlay.layer = 100
+	overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	game.add_child(overlay)
+	classroom = load("res://scripts/classroom.gd").new()
+	classroom.game = game
+	classroom.lesson_mode = lesson
+	classroom.finished.connect(func():
+		classroom = null
+		overlay.queue_free()
+		story_stage = "done"
+		get_tree().paused = false
+		resume()
+		save_game()
+		game.toast("The blacksmith and archive are open.")
+	)
+	get_tree().paused = false
+	overlay.add_child(classroom)
 
 func continue_game() -> void:
 	var data := ConfigFile.new()
@@ -224,12 +261,16 @@ func continue_game() -> void:
 	game.village_day.clock = float(data.get_value("hub","clock",270.0))
 	resume()
 	game.research.apply_offline()
-	game.research_menu.show_unread()
+	story_stage = data.get_value("story","stage","done")
+	if story_stage=="cinematic": play_intro()
+	elif story_stage=="classroom": play_classroom()
+	else: game.research_menu.show_unread()
 
 func save_game() -> Error:
 	if not started: return ERR_UNAVAILABLE
 	var data := ConfigFile.new()
 	var pos: Vector3 = game.player.seat_exit if game.player.activity == "sit" else game.player.last_safe
+	data.set_value("story","stage",story_stage)
 	data.set_value("hub","position",pos)
 	data.set_value("hub","watered",game.activities.watered)
 	data.set_value("hub","clock",game.village_day.clock)
@@ -265,6 +306,10 @@ func _input(event: InputEvent) -> void:
 			set_fullscreen(DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_ESCAPE:
+			if is_instance_valid(classroom) and classroom.active:
+				classroom.begin_roam()
+				get_viewport().set_input_as_handled()
+				return
 			if is_instance_valid(game.research_menu) and game.research_menu.active: return
 			if is_instance_valid(game.smith_shop) and game.smith_shop.active: return
 			if confirm.visible: confirm.hide()

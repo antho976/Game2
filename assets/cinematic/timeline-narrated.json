@@ -1,177 +1,177 @@
 {
-  "duration": 121.52037037037033,
+  "duration": 80.24000000000001,
   "chapters": [
     {
       "start": 0,
       "kind": 0,
       "image": "01-village.png",
       "title": "B E F O R E   T H E   F I R S T   G A T E",
-      "end": 19.41111111111111
+      "end": 13.6
     },
     {
-      "start": 19.41111111111111,
+      "start": 13.6,
       "kind": 1,
       "image": "02-the-feast.png",
       "title": "T H E   F E A S T",
-      "end": 37.40370370370371
+      "end": 24.54
     },
     {
-      "start": 37.40370370370371,
+      "start": 24.54,
       "kind": 2,
       "image": "03-sacrifice.png",
       "title": "O N E   R E F U S E D",
-      "end": 80.24814814814813
+      "end": 51.800000000000004
     },
     {
-      "start": 80.24814814814813,
+      "start": 51.800000000000004,
       "kind": 3,
       "image": "04-gates.png",
       "title": "T H E   O R D E A L",
-      "end": 102.40185185185182
+      "end": 65.70400000000001
     },
     {
-      "start": 102.40185185185182,
+      "start": 65.70400000000001,
       "kind": 4,
       "image": "05-children.png",
       "title": "",
-      "end": 121.52037037037033
+      "end": 80.24000000000001
     }
   ],
   "cues": [
     {
       "text": "We called them gods.",
       "start": 1.2,
-      "end": 4.4
+      "end": 2.88
     },
     {
       "text": "Beneath their gaze, we raised our kingdoms, and buried our fathers.",
-      "start": 4.75,
-      "end": 9.824074074074073
+      "start": 2.88,
+      "end": 7.627
     },
     {
       "text": "We knew not who had sown the hunger in our hearts.",
-      "start": 10.174074074074072,
-      "end": 15.248148148148147
+      "start": 7.627,
+      "end": 11.056
     },
     {
       "text": "Only that whatever we took, we hungered still.",
-      "start": 15.598148148148146,
-      "end": 19.56111111111111
+      "start": 11.056,
+      "end": 14.18
     },
     {
       "text": "And as we warred, they fed.",
-      "start": 19.91111111111111,
-      "end": 23.133333333333333
+      "start": 14.2,
+      "end": 16.580000000000002
     },
     {
       "text": "Yet there came an age when even our ruin could no longer sustain them.",
-      "start": 23.483333333333334,
-      "end": 29.668518518518518
+      "start": 16.580000000000002,
+      "end": 20.72
     },
     {
       "text": "They turned their eyes upon the living.",
-      "start": 30.01851851851852,
-      "end": 33.611111111111114
+      "start": 20.72,
+      "end": 22.99
     },
     {
       "text": "All that remained was to be gathered.",
-      "start": 33.961111111111116,
-      "end": 37.55370370370371
+      "start": 22.99,
+      "end": 25.14
     },
     {
       "text": "But one among them refused.",
-      "start": 37.90370370370371,
-      "end": 41.103703703703715
+      "start": 25.14,
+      "end": 27.14
     },
     {
       "text": "He had dwelt beneath our roofs.",
-      "start": 41.45370370370372,
-      "end": 44.67592592592594
+      "start": 27.147,
+      "end": 29.32
     },
     {
       "text": "There was one who waited for his return.",
-      "start": 45.02592592592594,
-      "end": 48.9888888888889
+      "start": 29.32,
+      "end": 31.75
     },
     {
       "text": "Through her, he came to know why we clung so fiercely to our days.",
-      "start": 49.3388888888889,
-      "end": 55.524074074074086
+      "start": 31.75,
+      "end": 36.1
     },
     {
       "text": "For her sake, he stood against his kind.",
-      "start": 55.87407407407409,
-      "end": 59.83703703703705
+      "start": 36.1,
+      "end": 38.82
     },
     {
       "text": "For ours, he gave his life.",
-      "start": 60.18703703703705,
-      "end": 63.40925925925927
+      "start": 38.82,
+      "end": 41.38
     },
     {
       "text": "His sacrifice stayed their hand.",
-      "start": 63.759259259259274,
-      "end": 66.95925925925927
+      "start": 41.38,
+      "end": 43.808
     },
     {
       "text": "They would not forgive him for it.",
-      "start": 67.30925925925926,
-      "end": 70.90185185185186
+      "start": 43.808,
+      "end": 45.7
     },
     {
       "text": "In their wrath, the gods opened the gates,",
-      "start": 71.25185185185185,
-      "end": 75.21481481481482
+      "start": 45.733000000000004,
+      "end": 48.84
     },
     {
       "text": "and laid their decree upon those he had spared.",
-      "start": 75.56481481481481,
-      "end": 79.89814814814814
+      "start": 48.84,
+      "end": 51.74
     },
     {
       "text": "\u201cThy world shall endure, so long as another bears its hunger.",
-      "start": 80.24814814814813,
-      "end": 85.32222222222221
+      "start": 51.800000000000004,
+      "end": 55.376000000000005
     },
     {
       "text": "What we are owed, thou shalt take from beyond these gates.",
-      "start": 85.6722222222222,
-      "end": 90.74629629629628
+      "start": 55.376000000000005,
+      "end": 59.0
     },
     {
       "text": "Spare the root, that thou mayest reap again.",
-      "start": 91.09629629629627,
-      "end": 95.05925925925924
+      "start": 59.0,
+      "end": 61.92
     },
     {
       "text": "Shouldst thou return empty-handed...",
-      "start": 95.40925925925923,
-      "end": 98.60925925925923
+      "start": 61.92,
+      "end": 64.347
     },
     {
       "text": "we shall gather what remains of thee.\u201d",
-      "start": 98.95925925925923,
-      "end": 102.55185185185182
+      "start": 64.347,
+      "end": 66.26
     },
     {
       "text": "Thus were we spared.",
-      "start": 102.90185185185182,
-      "end": 106.10185185185182
+      "start": 66.304,
+      "end": 68.18
     },
     {
       "text": "We, who had prayed for mercy,",
-      "start": 106.45185185185181,
-      "end": 109.67407407407404
+      "start": 68.427,
+      "end": 70.608
     },
     {
       "text": "went forth to take what others could not bear to lose.",
-      "start": 110.02407407407404,
-      "end": 115.09814814814811
+      "start": 70.608,
+      "end": 73.78
     },
     {
       "text": "And behind us, our children lived.",
-      "start": 115.4481481481481,
-      "end": 118.67037037037034
+      "start": 73.78,
+      "end": 76.42000000000002
     }
   ]
 }

@@ -11,6 +11,7 @@ func build(hub: HubKit) -> void:
 			weather_house(child)
 	var homes := [Vector3(-6.5,0,-10),Vector3(4.6,0,-12.2),Vector3(-13.1,0,-6.8),Vector3(13.5,0,-11.6)]
 	for i in homes.size():
+		if i==1: continue
 		var p: Vector3 = homes[i]
 		# Stacked firewood belongs beside a wall; the door and lane remain clear.
 		for j in 9:

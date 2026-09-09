@@ -64,9 +64,9 @@ func build() -> void:
 
 	points.append({"id":"dummy","pos":Vector3(21.5,0,4.2),"radius":1.8,"text":"Test the training dummy"})
 	points.append({"id":"sit","pos":Vector3(5.4,0,10.1),"radius":1.7,"text":"Sit for a moment"})
-	bell = asset("village_bell",Vector3(3.3,0,-10.5))
-	game.world.block(Vector3(3.3,1,-10.5),Vector3(1.1,2,.4))
-	points.append({"id":"bell","pos":Vector3(3.3,0,-9.6),"radius":1.8,"text":"Ring the village bell"})
+	bell = asset("village_bell",Vector3(1.1,0,-6.4))
+	game.world.block(Vector3(1.1,1,-6.4),Vector3(1.1,2,.4))
+	points.append({"id":"bell","pos":Vector3(1.1,0,-5.5),"radius":1.8,"text":"Ring the village bell"})
 	# Hand-built workyard details break up the empty spaces between larger assets.
 	var world = game.world
 	for i in 7:

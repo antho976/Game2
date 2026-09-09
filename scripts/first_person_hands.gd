@@ -15,7 +15,7 @@ func _ready() -> void:
 	for mesh in arms.find_children("*","MeshInstance3D",true,false):
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 func _process(delta: float) -> void:
-	visible = game.camera_mode==1 and not game.overview and not game.menus.home
+	visible = (game.camera_mode==1 or game.inside_school()) and not game.overview and not game.menus.home
 	if not visible: return
 	clock += delta
 	var speed: float = Vector2(game.player.velocity.x,game.player.velocity.z).length()

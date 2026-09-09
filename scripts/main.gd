@@ -18,7 +18,7 @@ var camera_pitch := 0.0
 var camera_sensitivity := .003
 
 func sync_camera_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if camera_mode==1 and not input_blocked else Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (camera_mode==1 or inside_school()) and not input_blocked else Input.MOUSE_MODE_VISIBLE
 
 var yaw := 0.0
 var camera_target := Vector3(0,0,7)
@@ -37,9 +37,14 @@ var equipment: Node
 var smith_shop: CanvasLayer
 var research: Node
 var research_menu: CanvasLayer
+var school: Node3D
+var was_in_school := false
+func inside_school() -> bool:
+	return is_instance_valid(school) and is_instance_valid(player) and school.contains(player.position)
+
 
 func _ready() -> void:
-	test_mode = "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -70,6 +75,8 @@ func _ready() -> void:
 	kit = HubKit.new()
 	world.add_child(kit)
 	kit.build(world)
+	school=load("res://scripts/schoolhouse.gd").new()
+	world.add_child(school)
 	activities = preload("res://scripts/activities.gd").new()
 	activities.game = self
 	world.add_child(activities)
@@ -81,6 +88,7 @@ func _ready() -> void:
 	camera.size = 23
 	camera.far = 180
 	add_child(camera)
+	camera.make_current()
 	var hands := preload("res://scripts/first_person_hands.gd").new()
 	hands.name = "FirstPersonHands"
 	hands.game = self
@@ -116,6 +124,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--school-test" in OS.get_cmdline_user_args():
+		var suite = load("res://tests/school_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--research-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/research_test.gd").new()
 		add_child(suite)
@@ -241,6 +253,9 @@ func build_ui() -> void:
 
 func _process(delta: float) -> void:
 	elapsed += delta
+	if was_in_school != inside_school():
+		was_in_school = inside_school()
+		sync_camera_mouse()
 	update_camera(delta)
 	notice_time = maxf(0,notice_time-delta)
 	notice.modulate.a = minf(notice_time,1)
@@ -251,7 +266,7 @@ func _process(delta: float) -> void:
 
 func update_camera(delta: float) -> void:
 	var title: bool = menus != null and menus.home
-	player.model.visible = camera_mode!=1 or title or overview
+	player.model.visible = (camera_mode!=1 and not inside_school()) or title or overview
 	if title or overview:
 		if title: yaw += delta*.055
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -259,6 +274,13 @@ func update_camera(delta: float) -> void:
 		camera_target = camera_target.lerp(Vector3(0,.1,-.5),1-exp(-delta*7))
 		camera.position = camera_target+Vector3(0,19,15).rotated(Vector3.UP,yaw)
 		camera.look_at(camera_target)
+		return
+	if inside_school() and not title and not overview:
+		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+		camera.fov = 75
+		camera.near = .04
+		camera.position = player.position+Vector3(0,1.65,0)
+		camera.rotation = Vector3(camera_pitch,yaw,0)
 		return
 	if camera_mode==1:
 		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
@@ -283,6 +305,12 @@ func update_camera(delta: float) -> void:
 
 func update_interaction() -> void:
 	nearest = ""
+	if inside_school():
+		if player.position.distance_to(school.teacher.global_position)<2.8:
+			nearest="teacher"
+			prompt.text="F  ·  Talk to the teacher"
+		else: prompt.text="The door is open. Stay as long as you wish."
+		return
 	var best := 2.3
 	var text := ""
 	for animal in kit.life.animals:
@@ -314,6 +342,10 @@ func update_interaction() -> void:
 
 func interact() -> void:
 	if player.activity_time > 0 or player.activity == "sit": return
+	if nearest=="teacher":
+		if is_instance_valid(menus.classroom): menus.classroom.ask()
+		else: menus.play_classroom(false)
+		return
 	if nearest=="archive":
 		research_menu.open()
 		return
@@ -338,11 +370,11 @@ func toast(text: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if input_blocked: return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT and camera_mode==1: sync_camera_mouse()
+		if event.button_index == MOUSE_BUTTON_LEFT and (camera_mode==1 or inside_school()): sync_camera_mouse()
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: adjust_camera_zoom(-1)
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: adjust_camera_zoom(1)
 	if event is InputEventMouseMotion:
-		if camera_mode==1 and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		if (camera_mode==1 or inside_school()) and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			yaw -= event.relative.x*camera_sensitivity
 			camera_pitch = clampf(camera_pitch-event.relative.y*camera_sensitivity,-1.35,1.35)
 		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE): yaw -= event.relative.x*.006

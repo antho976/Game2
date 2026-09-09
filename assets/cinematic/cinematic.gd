@@ -12,6 +12,7 @@ var stage: Control
 var chapter_index := -1
 var done := false
 var export_video := false
+var narration_enabled := false
 var base_dir: String
 var capture_times: Array = []
 var forced_time := -1.0
@@ -88,9 +89,9 @@ func layout_stage() -> void:
 func _process(delta: float) -> void:
 	if done:return
 	elapsed+=delta
-	if not audio.playing and elapsed>=1.2 and elapsed<2.0: audio.play()
+	if narration_enabled and not audio.playing and elapsed>=1.2 and elapsed<2.0: audio.play()
 	var clock:=elapsed
-	if not export_video and audio.playing:
+	if narration_enabled and not export_video and audio.playing:
 		clock=1.2+maxf(0,audio.get_playback_position()+AudioServer.get_time_since_last_mix()-AudioServer.get_output_latency())
 	if forced_time>=0:clock=forced_time
 	update_frame(clock)

@@ -22,7 +22,7 @@ func build(target: HubWorld) -> void:
 	build_ground()
 	# A connected square, with residential lanes behind the two working yards.
 	asset("cottage",Vector3(-6.5,0,-10),Vector3(4.8,4,4.1))
-	asset("townhouse",Vector3(4.6,0,-12.2),Vector3(4.2,4,4.2))
+	# This plot now contains the walkable schoolhouse.
 	asset("townhouse",Vector3(-13.1,0,-6.8),Vector3(4.2,4,4.2))
 	asset("cottage",Vector3(13.5,0,-11.6),Vector3(4.8,4,4.1))
 	preload("res://scripts/hub_workspaces.gd").new().build(self)
@@ -97,6 +97,8 @@ func build(target: HubWorld) -> void:
 	StaticBatcher.merge(self,BATCH_CHUNK)
 
 func on_path(p: Vector2) -> bool:
+	if absf(p.x-4.6)<5.15 and p.y>-17 and p.y< -7.45: return false
+	if absf(p.x-4.6)<.9 and p.y>=-7.45 and p.y< -4.4: return true
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
 	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25)
 	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -6.3 and p.y < 16
@@ -250,13 +252,17 @@ func build_boundaries() -> void:
 	for edge_x in [-19.0,26.0]:
 		world.box(Vector3(edge_x,.48,-.5),Vector3(.72,.96,32),world.stone[2],true)
 	for z in [-16.0,15.0]:
-		world.box(Vector3(3.5,.48,z),Vector3(45.7,.96,.72),world.stone[2],true)
+		if z==-16.0:
+			world.box(Vector3(-9.8,.48,z),Vector3(18.4,.96,.72),world.stone[2],true)
+			world.box(Vector3(18.0,.48,z),Vector3(16.7,.96,.72),world.stone[2],true)
+		else: world.box(Vector3(3.5,.48,z),Vector3(45.7,.96,.72),world.stone[2],true)
 	for edge_x in [-19.0,26.0]:
 		for i in 33:
 			var z := -16.0+i
 			world.box(Vector3(edge_x,1.02,z),Vector3(.87,.18,1.03),world.stone[i%6])
 	for z in [-16.0,15.0]:
 		for i in 46:
+			if z==-16.0 and -19+i> -1 and -19+i<10: continue
 			world.box(Vector3(-19+i,1.02,z),Vector3(1.03,.18,.87),world.stone[i%6])
 	for x in [-19.0,26.0]:
 		for z in [-16.0,-8,0,8,15]:
@@ -269,6 +275,7 @@ func build_boundaries() -> void:
 			var x := -18.8+i*.98+(row%2)*.20
 			if x>26: continue
 			for z in [-16.0,15.0]:
+				if z==-16.0 and x> -1 and x<10: continue
 				world.box(Vector3(x,.17+row*.29,z),Vector3(.91,.26,.78),world.stone[(i+row*2)%6])
 		for i in 32:
 			var z := -15.6+i*.98+(row%2)*.20
