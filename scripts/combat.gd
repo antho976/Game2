@@ -58,9 +58,31 @@ var salute := 0.0
 var fight_time := 0.0
 var last_result := ""
 var foe_swings := 0
+# Impact feedback: lane flashes, reticle pulses, camera recoil, slow motion and blood.
+var hit_lane := 0
+var hit_flash := 0.0
+var pulse_time := 0.0
+var pulse_color := Color.WHITE
+var kick := Vector3.ZERO # Camera-space recoil from the last impact.
+var roll := 0.0
+var punch := 0.0 # Field-of-view punch when a blow lands.
+var white_flash := 0.0
+var stamina_flash := 0.0
+var fallen := 0.0 # The beaten swordsman stays down until he rises to spar again.
+var slow_until := 0
+var foe_ghost := 0.0
+var ghosts := {} # Meter -> the pale bar that drains after it.
+var splats: Array = []
+var splat_texture: GradientTexture2D
+var glint_texture: GradientTexture2D
+var you_caption: Label
+var foe_caption: Label
+var flash_rect: ColorRect
 var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.seed=60908
+	splat_texture=soft_disc(Color(.30,.02,.02,.95),Color(.30,.02,.02,.72),.55)
+	glint_texture=soft_disc(Color(1,1,1,1),Color(1,1,1,.5),.3)
 	hero=RULES.state(100,100)
 	foe=RULES.state(140,100)
 	profile=RULES.partner(1)
@@ -185,6 +207,13 @@ func start() -> void:
 	guard_held=false
 	last_result=""
 	foe_swings=0
+	hit_flash=0
+	pulse_time=0
+	white_flash=0
+	stamina_flash=0
+	fallen=0
+	foe_ghost=0
+	for meter in ghosts: ghosts[meter].value=0
 	game.player.activity=""
 	game.player.activity_time=0
 	game.player.position=CENTER+Vector3(0,.1,1.6)
@@ -228,7 +257,6 @@ func stop(reason: String) -> void:
 	if is_instance_valid(hero_sword): hero_sword.queue_free()
 	if is_instance_valid(hero_trail): hero_trail.queue_free()
 	if is_instance_valid(hands_trail): hands_trail.queue_free()
-	if is_instance_valid(enemy_stance): enemy_stance.aim(0,0,0,0,4)
 	game.refresh_equipment()
 	respawn=3.0
 	foe=RULES.state(profile.health,100)
@@ -241,6 +269,29 @@ func show_banner(text: String,color := Color(1,.9,.7)) -> void:
 	banner.text=text
 	banner.modulate=color
 	banner_time=1.1
+	# The word lands with a punch: oversized for a frame, then settling with a little overshoot.
+	banner.pivot_offset=banner.size*.5
+	banner.scale=Vector2.ONE*1.35
+	create_tween().tween_property(banner,"scale",Vector2.ONE,.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+func pulse(color: Color) -> void:
+	pulse_time=.35
+	pulse_color=color
+# Camera recoil away from a lane, with a forward shove when the player's own blow lands.
+func recoil(lane: int,strength: float,forward := 0.0) -> void:
+	var axis: Vector3=[Vector3(0,1,0),Vector3(1,0,0),Vector3(0,-1,0),Vector3(-1,0,0)][lane]
+	kick+=-axis*strength+Vector3(0,0,-forward)
+	roll+=(-.9 if lane==1 else (.9 if lane==3 else 0.0))*strength
+func refuse() -> void:
+	stamina_flash=.6
+	audio.play("deny",game.player.position+Vector3.UP,-14)
+func slow_motion(scale: float,seconds: float) -> void:
+	if game.test_mode or DisplayServer.get_name()=="headless": return
+	Engine.time_scale=scale
+	slow_until=Time.get_ticks_msec()+int(seconds*1000)
+	get_tree().create_timer(seconds,true,false,true).timeout.connect(func():
+		if Time.get_ticks_msec()>=slow_until-5: Engine.time_scale=1.0)
+func _exit_tree() -> void:
+	Engine.time_scale=1.0
 func set_guard(direction: int) -> void:
 	if hero.phase=="windup" and active:
 		feint(hero,direction,true)
@@ -254,6 +305,7 @@ func feint(fighter: Dictionary,direction: int,is_hero: bool) -> bool:
 	if is_hero: fighter.stamina-=6
 	fighter.feint_at=RULES.progress(fighter)
 	fighter.feinted=true
+	fighter.cued=false
 	fighter.attack_dir=direction
 	fighter.guard=direction
 	fighter.timer=fighter.total*.55
@@ -277,6 +329,8 @@ func block(pressed: bool) -> void:
 		hero.block_age=0.0 if parry_lock<=0 else 99.0
 		parry_lock=RULES.REARM_LOCK
 		hero.blocking=true
+		hero.raise=.14
+		audio.play("raise",game.player.position+Vector3.UP*1.2,-18)
 	elif not pressed: hero.blocking=false
 func attack(heavy: bool) -> bool:
 	if not active: return false
@@ -288,6 +342,7 @@ func attack(heavy: bool) -> bool:
 	var cost: float=float(weapon().stamina)*(1.6 if heavy else 1.0)
 	if hero.stamina<cost:
 		say("Not enough stamina")
+		refuse()
 		return false
 	hero.stamina-=cost
 	hero.regen_delay=.8
@@ -313,7 +368,9 @@ func attack(heavy: bool) -> bool:
 func quickstep() -> bool:
 	if not active or hero.phase!="idle" or dodge_time>0: return false
 	var cost := 19.0 if has_skill("footwork") else 24.0
-	if hero.stamina<cost: return false
+	if hero.stamina<cost:
+		refuse()
+		return false
 	hero.stamina-=cost
 	hero.regen_delay=.75
 	hero.blocking=false
@@ -329,14 +386,21 @@ func movement(direction: Vector3,speed: float) -> Vector3:
 	if not active: return direction*speed
 	if hitstop>0: return Vector3.ZERO
 	if dodge_time>0: return dodge_direction*8.5*(.65+.35*dodge_time/DODGE_TIME)
-	if hero.phase=="exhausted" or hero.phase=="hurt": return Vector3.ZERO
+	var knock: Vector3=hero.get("knock",Vector3.ZERO)
+	if hero.phase=="exhausted" or hero.phase=="hurt": return knock
 	var pace: float=minf(speed,2.8)
 	match hero.phase:
 		"windup": pace*=.38
 		"recovery": pace*=.6
 	if hero.blocking: pace*=.55
 	if winded(hero): pace*=.85
-	return direction*pace
+	var result: Vector3=direction*pace
+	if hero.phase=="windup" and RULES.progress(hero)>=.62:
+		# The body drives into the cut: a committed swing closes the last of the measure.
+		var toward: Vector3=enemy.position-game.player.position
+		toward.y=0
+		if toward.length()>1.25 and toward.length()<REACH+.9: result+=toward.normalized()*(3.2 if hero.heavy else 2.4)
+	return result+knock
 func _notification(what: int) -> void:
 	if what==NOTIFICATION_APPLICATION_FOCUS_OUT and not hero.is_empty():
 		hero.blocking=false
@@ -381,6 +445,7 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 	fighter.regen_delay=maxf(0,fighter.regen_delay-delta)
 	fighter.pain=maxf(0,fighter.pain-delta*4)
 	fighter.flash=maxf(0,fighter.flash-delta)
+	fighter.raise=maxf(0,fighter.get("raise",0.0)-delta)
 	if fighter.chain_time>0:
 		fighter.chain_time-=delta
 		if fighter.chain_time<=0: fighter.chain.clear()
@@ -393,10 +458,23 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 		var progress: float=RULES.progress(fighter)
 		if fighter.get("swoosh",false) and progress>=.62:
 			fighter.swoosh=false
-			audio.play("heavy_whoosh" if fighter.heavy else "whoosh",(game.player.position if is_hero else enemy.position)+Vector3.UP*1.2,-13 if fighter.heavy else -16,1.0 if is_hero else .92)
-			var trail=hero_trail if is_hero else enemy_trail
-			if is_instance_valid(trail): trail.active=true
-			if is_hero and is_instance_valid(hands_trail): hands_trail.active=true
+			var feet: Vector3=game.player.position if is_hero else enemy.position
+			audio.play("heavy_whoosh" if fighter.heavy else "whoosh",feet+Vector3.UP*1.2,-11 if fighter.heavy else -16,1.0 if is_hero else .92)
+			if fighter.heavy:
+				# A heavy cut plants the front foot as the blade drops.
+				audio.play("stomp",feet,-16)
+				puff(feet)
+			for ribbon in [hero_trail if is_hero else enemy_trail,hands_trail if is_hero else null]:
+				if not is_instance_valid(ribbon): continue
+				ribbon.active=true
+				ribbon.life=.30 if fighter.heavy else .22
+				ribbon.width=.8 if fighter.heavy else .55
+				ribbon.color=(Color(1,.95,.75) if fighter.heavy else Color(1,.92,.72)) if is_hero else (Color(1,.5,.35) if fighter.heavy else Color(1,.62,.45))
+			if not is_hero and is_instance_valid(enemy_sword): glint(enemy_sword.to_global(Vector3(0,1.25,0)),Color(1,.6,.4))
+		if not is_hero and fighter.timer<=RULES.PERFECT_WINDOW and not fighter.get("cued",false):
+			# The last fifth of a second before impact: a guard raised now is a perfect one.
+			fighter.cued=true
+			audio.play("tick",enemy.position+Vector3.UP*1.3,-17)
 		if not is_hero and fighter.get("feint_plan",false) and progress>=.45:
 			fighter.feint_plan=false
 			var open: Array=[]
@@ -408,6 +486,7 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 		fighter.phase="recovery"
 		fighter.timer=RULES.recovery(fighter.heavy,false)
 		fighter.total=fighter.timer
+		snap_strike(is_hero)
 		var result := resolve_hit(is_hero)
 		if result=="miss":
 			fighter.whiff=true
@@ -476,10 +555,13 @@ func resolve_hit(from_hero: bool) -> String:
 		show_banner("CLASH",Color(1,.95,.8))
 		say("Blades bind. Both swings are thrown off.")
 		impact(true)
-		sparks(contact,Color(1,.9,.6),18)
-		audio.play("bind",contact,-8)
-		hitstop=.10
-		shake=.7
+		sparks(contact,Color(1,.9,.6),24)
+		audio.play("bind",contact,-6)
+		pulse(Color(1,.95,.8))
+		recoil(attacker.attack_dir,.035,.01)
+		white_flash=.12
+		hitstop=.14
+		shake=.8
 		last_result="clash"
 		return "clash"
 	var guarding: bool=defender.blocking and defender.phase=="idle"
@@ -511,11 +593,14 @@ func resolve_hit(from_hero: bool) -> String:
 		else:
 			say("Perfect block! Counter from "+RULES.DIRECTIONS[defender.counter_dir]+".")
 			show_banner("PERFECT",Color(1,.95,.75))
+			white_flash=.2
 		impact(true)
-		sparks(contact,Color(1,.95,.7),22)
-		audio.play("parry",contact,-6)
-		hitstop=.08
-		shake=.55
+		sparks(contact,Color(1,.95,.7),28)
+		audio.play("parry",contact,-5)
+		pulse(Color(.6,.8,1) if from_hero else Color(1,.95,.75))
+		recoil(attacker.attack_dir,.055 if from_hero else .03,-.02 if from_hero else 0.0)
+		hitstop=.12
+		shake=.6
 		last_result=result
 		return result
 	if result=="block":
@@ -536,10 +621,12 @@ func resolve_hit(from_hero: bool) -> String:
 			show_banner("GUARD BROKEN",Color(1,.6,.3))
 		else: say("Guarded. Change your attack direction." if from_hero else "Blocked")
 		impact(true)
-		sparks(contact,Color(1,.85,.55),10)
-		audio.play("clang",contact,-9)
-		hitstop=.04
-		shake=.25
+		sparks(contact,Color(1,.85,.55),16 if attacker.heavy else 10)
+		audio.play("clang",contact,-7 if attacker.heavy else -9)
+		if attacker.heavy: audio.play("thud",contact,-14,.8)
+		recoil(attacker.attack_dir,(.06 if attacker.heavy else .03) if not from_hero else 0.0,.02 if from_hero else 0.0)
+		hitstop=.07 if attacker.heavy else .04
+		shake=.5 if attacker.heavy else .25
 		last_result=result
 		if defender.health<=0: finish(from_hero)
 		return result
@@ -566,31 +653,43 @@ func resolve_hit(from_hero: bool) -> String:
 	defender.pain=1.0
 	defender.chain.clear()
 	defender.combo=""
+	var stagger: bool=attacker.heavy or finishing or attacker.critical
+	defender.staggered=stagger
 	if defender.phase!="exhausted" and interrupted:
 		defender.phase="hurt"
-		defender.timer=.32 if attacker.heavy else .24
+		defender.timer=.46 if stagger else .26
 		defender.total=defender.timer
 		defender.followup=false
 		defender.feint_plan=false
-	defender.knock=(enemy.position-game.player.position if from_hero else game.player.position-enemy.position).normalized()*(2.4 if attacker.heavy else 1.4)
+	var away: Vector3=(enemy.position-game.player.position if from_hero else game.player.position-enemy.position).normalized()
+	defender.knock=away*(3.4 if stagger else 1.7)
 	if from_hero:
 		decision=.12
 		extend_chain(attacker,attacker.attack_dir)
 		if not form.is_empty():
 			attacker.chain.clear()
 			show_banner(str(form.name).to_upper(),Color(1,.85,.45))
+		recoil(attacker.attack_dir,0.0,.045 if stagger else .022)
+		punch=1.0 if stagger else .55
+		pulse(Color(1,.9,.6) if stagger else Color(1,.8,.6))
 	else:
-		hurt_flash=.55
+		hurt_flash=.75 if stagger else .5
+		hit_lane=attacker.attack_dir
+		hit_flash=.6
+		recoil(attacker.attack_dir,.095 if stagger else .05)
+	if attacker.critical or finishing: white_flash=.25
 	defender.blocking=false
 	impact(false)
+	blood(contact,away,stagger)
 	sparks(contact,Color(1,.55,.3),8 if not attacker.heavy else 14)
-	audio.play("thud",contact,-6 if attacker.heavy else -9)
+	audio.play("slam" if attacker.heavy else "thud",contact,-4 if attacker.heavy else -8)
+	audio.play("flesh",contact,-8 if stagger else -12)
 	audio.play("clang",contact,-20,.8)
-	hitstop=.12 if (attacker.critical or finishing) else (.09 if attacker.heavy else .05)
-	shake=.9 if attacker.heavy else .45
+	hitstop=.20 if (attacker.critical or finishing) else (.14 if attacker.heavy else .07)
+	shake=1.0 if stagger else .5
 	var label := "Critical! " if from_hero and attacker.critical else ("Finishing blow! " if finishing else ("Guard forced! " if pierced else ""))
 	say(label+str(roundi(damage))+" damage")
-	spawn_number(str(roundi(damage)),contact+Vector3(rng.randf_range(-.2,.2),0,0),Color(1,.9,.55) if attacker.critical or finishing or not form.is_empty() else (Color(1,.75,.6) if from_hero else Color(1,.45,.4)))
+	spawn_number(str(roundi(damage)),contact+Vector3(rng.randf_range(-.2,.2),0,0),Color(1,.9,.55) if attacker.critical or finishing or not form.is_empty() else (Color(1,.75,.6) if from_hero else Color(1,.45,.4)),1.45 if (attacker.critical or finishing) else (1.2 if attacker.heavy else 1.0))
 	last_result=result
 	if defender.health<=0: finish(from_hero)
 	return result
@@ -605,12 +704,15 @@ func finish(hero_won: bool) -> void:
 		if flawless: reward+=" (flawless)"
 		if game.equipment.level>previous_level: reward+=" • Level %d! Press K to spend your skill point."%game.equipment.level
 		show_banner("VICTORY",Color(1,.88,.5))
-		hitstop=.3
 		shake=1.0
+		white_flash=.3
+		slow_motion(.3,.9)
 		stop(reward if error.is_empty() else error)
+		fallen=respawn
 	else:
 		show_banner("DEFEATED",Color(1,.5,.4))
-		hurt_flash=1.0
+		hurt_flash=1.4
+		slow_motion(.45,.8)
 		stop("Defeated. Rest, then press F to try again. No items lost.")
 func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe_swings+=1
@@ -625,6 +727,7 @@ func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe.feinted=false
 	foe.whiff=false
 	foe.swoosh=true
+	foe.cued=false
 	foe.stamina=maxf(0,foe.stamina-15)
 	foe.regen_delay=.8
 func _physics_process(delta: float) -> void:
@@ -633,7 +736,12 @@ func _physics_process(delta: float) -> void:
 	buffer_time=maxf(0,buffer_time-delta)
 	if buffer_time<=0: buffered=-1
 	if not active:
-		enemy.position=enemy.position.lerp(CENTER+Vector3(0,.1,-1),minf(delta*2,1))
+		fallen=maxf(0,fallen-delta)
+		if is_instance_valid(enemy_stance):
+			# Beaten, he drops to a knee and stays there until he is ready to spar again.
+			if fallen>0: enemy_stance.aim(.85,0,.25,.42,5)
+			else: enemy_stance.aim(0,0,0,0,4)
+		if fallen<=0: enemy.position=enemy.position.lerp(CENTER+Vector3(0,.1,-1),minf(delta*2,1))
 		enemy_model.rotation.y=lerp_angle(enemy_model.rotation.y,0,minf(delta*3,1))
 		enemy_model.rotation.z=0
 		pose_sword(enemy_sword,foe,delta)
@@ -657,6 +765,7 @@ func _physics_process(delta: float) -> void:
 		posture(hero,hero_stance,-1.0)
 		posture(foe,enemy_stance,1.0)
 		return
+	hero.knock=hero.get("knock",Vector3.ZERO).move_toward(Vector3.ZERO,delta*7)
 	salute=maxf(0,salute-delta)
 	if salute<=0 and fight_time==0:
 		show_banner("FIGHT",Color(1,.75,.4))
@@ -676,7 +785,9 @@ func _physics_process(delta: float) -> void:
 	pose_sword(enemy_sword,foe,delta)
 	posture(hero,hero_stance,-1.0)
 	posture(foe,enemy_stance,1.0)
-	enemy_model.rotation.z=sin(foe.timer*32)*.055*foe.pain if foe.phase=="hurt" else 0.0
+	enemy_model.rotation.z=sin(foe.timer*32)*(.09 if foe.get("staggered",false) else .055)*foe.pain if foe.phase=="hurt" else 0.0
+	# The player's own model shudders through a hit; the walk script has already set its bank this tick.
+	if hero.phase=="hurt": game.player.model.rotation.z+=sin(hero.timer*30)*(.08 if hero.get("staggered",false) else .05)*hero.pain
 	var hands=game.camera.get_node_or_null("FirstPersonHands")
 	if hands and hands.visible:
 		var held=hands.get_node_or_null("HeldGreatsword")
@@ -697,7 +808,10 @@ func partner_ai(delta: float,toward: Vector3,distance: float) -> void:
 				foe.strafe=-foe.strafe
 				foe.strafe_time=rng.randf_range(1.4,3.2)
 			step=forward.cross(Vector3.UP)*foe.strafe*.55
-	elif foe.phase=="windup" and distance>1.7: step=forward*.7
+	elif foe.phase=="windup":
+		# He drives into his own cut once it is committed, closing the last of the measure.
+		if RULES.progress(foe)>=.62 and distance>1.25: step=forward*(2.6 if foe.heavy else 2.0)
+		elif distance>1.7: step=forward*.7
 	var knock: Vector3=foe.get("knock",Vector3.ZERO)
 	foe.knock=knock.move_toward(Vector3.ZERO,delta*6)
 	enemy.velocity=step+knock
@@ -773,7 +887,11 @@ func pose_sword(sword: Node3D,fighter: Dictionary,delta: float,first_person := f
 		var cut: float=pow(smoothstep(.70,1.0,t),.6)
 		pos=pos.lerp(STRIKE[direction]+(Vector3(0,0,.06) if fighter.heavy else Vector3.ZERO),cut)
 		rot=rot.lerp(STRIKE_ROT[direction],cut)
-		if t>.7: rate=42.0
+		if fighter.heavy and t>.5 and t<.7:
+			# The heavy blade trembles at the top of its chamber before it drops.
+			var tremor: float=(t-.5)/.2
+			pos+=Vector3(sin(fighter.timer*90)*.012,sin(fighter.timer*70)*.01,0)*tremor
+		if t>.7: rate=55.0
 	elif fighter.phase=="recovery":
 		var t: float=RULES.progress(fighter)
 		var through: float=smoothstep(0,.35,t)
@@ -785,8 +903,9 @@ func pose_sword(sword: Node3D,fighter: Dictionary,delta: float,first_person := f
 			pos+=Vector3(.25 if direction!=1 else -.25,.15,-.15)*(1.0-back)
 			rot+=Vector3(-.6,0,.8 if direction!=1 else -.8)*(1.0-back)
 	elif fighter.phase=="hurt":
-		pos+=Vector3(0,-.10,-.15)
-		rot+=Vector3(-.4,0,0)
+		var reel: float=1.6 if fighter.get("staggered",false) else 1.0
+		pos+=Vector3(0,-.10,-.15)*reel
+		rot+=Vector3(-.4*reel,0,0)
 		rate=30.0
 	elif fighter.phase=="exhausted":
 		var sway: float=sin(fighter.timer*4.0)*.05
@@ -797,6 +916,11 @@ func pose_sword(sword: Node3D,fighter: Dictionary,delta: float,first_person := f
 		pos+=Vector3(0,.03,.10)
 		rot+=Vector3(.15,0,0)
 		if fighter.flash>0: pos+=Vector3(0,.04,-.10)*fighter.flash*3
+		var raise: float=fighter.get("raise",0.0)
+		if raise>0:
+			# A freshly raised guard snaps up past its mark and settles.
+			pos+=Vector3(0,.07,.08)*(raise/.14)
+			rate=34.0
 	else:
 		var breath: float=sin(Time.get_ticks_msec()*.0021)
 		pos+=Vector3(0,.012*breath,.01*breath)
@@ -819,12 +943,14 @@ func posture(fighter: Dictionary,stance,s: float) -> void:
 	match fighter.phase:
 		"windup":
 			var t: float=RULES.progress(fighter)
-			if t<.7: stance.aim(-.14*smoothstep(0,.6,t),side*.45*smoothstep(0,.6,t),0,.02,14)
-			else: stance.aim(.38,-side*.5,0,.07,30)
+			if t<.7: stance.aim((-.2 if fighter.heavy else -.14)*smoothstep(0,.6,t),side*.45*smoothstep(0,.6,t),0,.02,14)
+			else: stance.aim(.5 if fighter.heavy else .38,-side*.5,0,.10 if fighter.heavy else .07,30)
 		"recovery":
 			var t: float=RULES.progress(fighter)
 			stance.aim(lerpf(.25,.10,t),lerpf(-side*.4,0,t),0,lerpf(.06,.03,t),10)
-		"hurt": stance.aim(-.28,0,.12*s*(1 if lane%2==0 else -1),.05,24)
+		"hurt":
+			var reel: float=1.6 if fighter.get("staggered",false) else 1.0
+			stance.aim(-.28*reel,0,.12*s*reel*(1 if lane%2==0 else -1),.05*reel,24)
 		"exhausted": stance.aim(.45,0,sin(fighter.timer*4)*.04,.12,5)
 		_:
 			if fighter.blocking: stance.aim(.06,side*.12,0,.06,12)
@@ -907,7 +1033,7 @@ func puff(pos: Vector3) -> void:
 	add_child(dust)
 	dust.emitting=true
 	get_tree().create_timer(1.2).timeout.connect(dust.queue_free)
-func spawn_number(text: String,pos: Vector3,color: Color) -> void:
+func spawn_number(text: String,pos: Vector3,color: Color,size := 1.0) -> void:
 	var number := Label3D.new()
 	number.text=text
 	number.font_size=44
@@ -918,18 +1044,116 @@ func spawn_number(text: String,pos: Vector3,color: Color) -> void:
 	number.billboard=BaseMaterial3D.BILLBOARD_ENABLED
 	number.no_depth_test=true
 	number.position=pos+Vector3(0,.25,0)
+	number.scale=Vector3.ONE*size*1.8
 	add_child(number)
 	var tween := create_tween().set_parallel(true)
-	tween.tween_property(number,"position",number.position+Vector3(0,.7,0),.85).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	# The number lands oversized and settles with a snap, then drifts up and fades.
+	tween.tween_property(number,"scale",Vector3.ONE*size,.16).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(number,"position",number.position+Vector3(rng.randf_range(-.15,.15),.7,0),.85).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(number,"modulate:a",0.0,.85).set_delay(.25)
 	tween.chain().tween_callback(number.queue_free)
+# A soft radial disc texture for blood marks and blade glints.
+func soft_disc(core: Color,mid: Color,mid_at: float) -> GradientTexture2D:
+	var texture := GradientTexture2D.new()
+	texture.gradient=Gradient.new()
+	texture.gradient.set_color(0,core)
+	texture.gradient.set_color(1,Color(core.r,core.g,core.b,0))
+	texture.gradient.add_point(mid_at,mid)
+	texture.fill=GradientTexture2D.FILL_RADIAL
+	texture.fill_from=Vector2(.5,.5)
+	texture.fill_to=Vector2(1,.5)
+	texture.width=64
+	texture.height=64
+	return texture
+# A white flare at the blade tip the instant a cut commits: the moment to read it.
+func glint(pos: Vector3,color := Color(1,1,1)) -> void:
+	var flare := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size=Vector2(.24,.24)
+	var material := StandardMaterial3D.new()
+	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode=BaseMaterial3D.BLEND_MODE_ADD
+	material.billboard_mode=BaseMaterial3D.BILLBOARD_ENABLED
+	material.albedo_texture=glint_texture
+	material.albedo_color=color
+	material.no_depth_test=true
+	quad.material=material
+	flare.mesh=quad
+	flare.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flare.position=pos
+	flare.scale=Vector3.ONE*.4
+	add_child(flare)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(flare,"scale",Vector3.ONE*1.7,.16).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material,"albedo_color:a",0.0,.2)
+	tween.chain().tween_callback(flare.queue_free)
+# A cut that lands throws blood away from the blade and leaves a mark on the yard.
+func blood(pos: Vector3,away: Vector3,heavy: bool) -> void:
+	var spray := CPUParticles3D.new()
+	spray.amount=24 if heavy else 12
+	spray.one_shot=true
+	spray.explosiveness=1.0
+	spray.lifetime=.6
+	spray.direction=(away+Vector3.UP*.6).normalized()
+	spray.spread=38
+	spray.initial_velocity_min=2.0
+	spray.initial_velocity_max=5.5 if heavy else 4.0
+	spray.gravity=Vector3(0,-14,0)
+	spray.scale_amount_min=.5
+	spray.scale_amount_max=1.4
+	spray.damping_min=1.0
+	spray.damping_max=3.0
+	var quad := QuadMesh.new()
+	quad.size=Vector2(.05,.05)
+	var material := StandardMaterial3D.new()
+	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color=Color(.42,.03,.03)
+	material.billboard_mode=BaseMaterial3D.BILLBOARD_PARTICLES
+	quad.material=material
+	spray.mesh=quad
+	spray.position=pos
+	add_child(spray)
+	spray.emitting=true
+	get_tree().create_timer(1.3).timeout.connect(spray.queue_free)
+	splat(Vector3(pos.x,0,pos.z)+away*rng.randf_range(.2,.6)+Vector3(rng.randf_range(-.3,.3),0,rng.randf_range(-.3,.3)),.24 if heavy else .15)
+func splat(pos: Vector3,size: float) -> void:
+	var mark := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size=Vector2(size*rng.randf_range(1.6,2.6),size*rng.randf_range(1.2,2.0))
+	var material := StandardMaterial3D.new()
+	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_texture=splat_texture
+	material.albedo_color=Color(1,1,1,.85)
+	quad.material=material
+	mark.mesh=quad
+	mark.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mark.position=Vector3(pos.x,.035,pos.z)
+	mark.rotation=Vector3(-PI/2,rng.randf_range(0,TAU),0)
+	add_child(mark)
+	splats.append(mark)
+	while splats.size()>14:
+		var old=splats.pop_front()
+		if is_instance_valid(old): old.queue_free()
+	var tween := create_tween()
+	tween.tween_interval(7.0)
+	tween.tween_property(material,"albedo_color:a",0.0,6.0)
+	tween.tween_callback(mark.queue_free)
+# Freeze the attacker's blade at full extension so the hit-stop shows the cut, not a lerp toward it.
+func snap_strike(is_hero: bool) -> void:
+	pose_sword(hero_sword if is_hero else enemy_sword,hero if is_hero else foe,0)
+	if is_hero:
+		var hands=game.camera.get_node_or_null("FirstPersonHands")
+		var held=hands.get_node_or_null("HeldGreatsword") if hands else null
+		if held: pose_sword(held,hero,0,true)
 func build_hud() -> void:
 	hud=CanvasLayer.new()
 	hud.layer=20
 	add_child(hud)
 	var panel := PanelContainer.new()
 	panel.position=Vector2(24,142)
-	panel.custom_minimum_size=Vector2(380,0)
+	panel.custom_minimum_size=Vector2(340,0)
 	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel",UiKit.flat(Color(.035,.045,.043,.9),Color(.60,.47,.25),1))
 	hud.add_child(panel)
@@ -938,34 +1162,49 @@ func build_hud() -> void:
 	panel.add_child(column)
 	status=Label.new()
 	status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	status.add_theme_font_size_override("font_size",17)
+	status.add_theme_font_size_override("font_size",16)
 	column.add_child(status)
-	caption(column,"YOU")
-	health_bar=bar(column,Color(.80,.32,.26),9)
+	you_caption=caption(column,"YOU")
+	health_bar=bar(column,Color(.80,.32,.26),10)
 	stamina_bar=bar(column,Color(.28,.64,.43),7)
 	hero_exhaust_bar=bar(column,Color(.94,.57,.24),4)
-	caption(column,"SWORDSMAN")
-	foe_health_bar=bar(column,Color(.80,.32,.26),9)
+	foe_caption=caption(column,"SWORDSMAN")
+	foe_health_bar=bar(column,Color(.80,.32,.26),10)
 	exhaustion_bar=bar(column,Color(.94,.57,.24),4)
 	meters=Label.new()
 	meters.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	meters.add_theme_font_size_override("font_size",13)
+	meters.add_theme_font_size_override("font_size",12)
+	meters.modulate=UiKit.MUTED
 	column.add_child(meters)
 	var compass=preload("res://scripts/combat_compass.gd").new()
 	compass.combat=self
 	compass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.add_child(compass)
-	hints=Label.new()
-	hints.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	hints.text="LMB Light   Q Heavy   RMB Guard   Space Quickstep\nArrows or mouse swipe: lane   Swipe mid-swing: feint   RMB mid-swing: pull\nGold: your lane   Blue: their guard   Red: incoming\nForms: Left Right High  ·  Low High Low"
-	hints.add_theme_font_size_override("font_size",13)
-	hints.modulate=UiKit.MUTED
-	column.add_child(hints)
 	vignette=ColorRect.new()
 	vignette.color=Color(.55,.05,.02,0)
 	vignette.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.add_child(vignette)
+	flash_rect=ColorRect.new()
+	flash_rect.color=Color(1,.97,.9,0)
+	flash_rect.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud.add_child(flash_rect)
+	# Controls live along the bottom edge and fade once the first exchanges are over.
+	hints=Label.new()
+	hints.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	hints.text="LMB Light   Q Heavy   RMB Guard   Space Quickstep   Arrows / swipe: lane\nSwipe mid-swing: feint   RMB mid-swing: pull   Gold: your lane   Blue: his guard   Red: incoming, ring turns white: guard now\nForms: Left Right High  ·  Low High Low"
+	hints.add_theme_font_size_override("font_size",13)
+	hints.add_theme_color_override("font_shadow_color",Color(0,0,0,.8))
+	hints.add_theme_constant_override("shadow_offset_x",1)
+	hints.add_theme_constant_override("shadow_offset_y",2)
+	hints.modulate=UiKit.MUTED
+	hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	hints.offset_top=-176
+	hints.offset_bottom=-108
+	hints.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	hints.hide()
+	hud.add_child(hints)
 	banner=Label.new()
 	banner.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	banner.add_theme_font_size_override("font_size",36)
@@ -987,32 +1226,70 @@ func build_hud() -> void:
 	skill_panel.add_theme_stylebox_override("panel",UiKit.flat(Color(.045,.055,.05,.98),UiKit.GOLD,1,8,Vector2(24,20)))
 	hud.add_child(skill_panel)
 	skill_panel.hide()
-func caption(parent: Node,text: String) -> void:
+func caption(parent: Node,text: String) -> Label:
 	var label := Label.new()
 	label.text=text
 	label.add_theme_font_size_override("font_size",11)
 	label.modulate=UiKit.GOLD
 	parent.add_child(label)
+	return label
+# A meter over a paler ghost bar that drains after it, so a lost chunk stays readable for a moment.
 func bar(parent: Node,color: Color,height := 7) -> ProgressBar:
+	var frame := Control.new()
+	frame.custom_minimum_size=Vector2(0,height)
+	frame.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	parent.add_child(frame)
+	var ghost := ProgressBar.new()
+	ghost.show_percentage=false
+	ghost.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ghost.add_theme_stylebox_override("background",UiKit.flat(Color(.10,.13,.12),Color.TRANSPARENT,0,2,Vector2.ZERO))
+	ghost.add_theme_stylebox_override("fill",UiKit.flat(color.lightened(.45),Color.TRANSPARENT,0,2,Vector2.ZERO))
+	frame.add_child(ghost)
 	var meter := ProgressBar.new()
-	meter.custom_minimum_size=Vector2(0,height)
 	meter.show_percentage=false
-	meter.add_theme_stylebox_override("background",UiKit.flat(Color(.10,.13,.12),Color.TRANSPARENT,0,2,Vector2.ZERO))
+	meter.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	meter.add_theme_stylebox_override("background",UiKit.flat(Color.TRANSPARENT,Color.TRANSPARENT,0,2,Vector2.ZERO))
 	meter.add_theme_stylebox_override("fill",UiKit.flat(color,Color.TRANSPARENT,0,2,Vector2.ZERO))
-	parent.add_child(meter)
+	frame.add_child(meter)
+	ghosts[meter]=ghost
 	return meter
+func settle(meter: ProgressBar,delta: float) -> void:
+	var ghost: ProgressBar=ghosts[meter]
+	ghost.max_value=meter.max_value
+	if ghost.value<meter.value: ghost.value=meter.value
+	else: ghost.value=lerpf(ghost.value,meter.value,minf(delta*2.2,1))
 func _process(delta: float) -> void:
 	var near_yard: bool=game.player.position.distance_to(CENTER)<8
 	hud.get_child(0).visible=active and not game.input_blocked
 	banner_time=maxf(0,banner_time-delta)
 	banner.modulate.a=clampf(banner_time*2.2,0,1)
 	hurt_flash=maxf(0,hurt_flash-delta*1.6)
-	vignette.color.a=(hurt_flash*.28 if active or hurt_flash>0 else 0.0)*(1.0 if not game.input_blocked else 0.0)
-	if shake>0 and not game.test_mode:
-		shake=maxf(0,shake-delta*3.2)
-		var jolt := Vector3(rng.randf_range(-1,1),rng.randf_range(-1,1),0)*shake*shake*.045
-		game.camera.position+=game.camera.global_transform.basis*jolt
-		game.camera.rotation.z+=rng.randf_range(-1,1)*shake*shake*.006
+	hit_flash=maxf(0,hit_flash-delta*1.8)
+	pulse_time=maxf(0,pulse_time-delta)
+	white_flash=maxf(0,white_flash-delta*2.5)
+	stamina_flash=maxf(0,stamina_flash-delta*1.5)
+	var shown: float=1.0 if not game.input_blocked else 0.0
+	var low: bool=active and hero.health<hero.max_health*.3
+	var low_pulse: float=(.5+.5*sin(Time.get_ticks_msec()*.006))*.16 if low else 0.0
+	vignette.color.a=(clampf(hurt_flash,0,1)*.42+low_pulse if active or hurt_flash>0 else 0.0)*shown
+	flash_rect.color.a=clampf(white_flash,0,1)*.35*shown
+	if not game.test_mode:
+		if shake>0:
+			shake=maxf(0,shake-delta*3.2)
+			var jolt := Vector3(rng.randf_range(-1,1),rng.randf_range(-1,1),0)*shake*shake*.05
+			game.camera.position+=game.camera.global_transform.basis*jolt
+			game.camera.rotation.z+=rng.randf_range(-1,1)*shake*shake*.007
+		if kick.length()>.0005 or absf(roll)>.0005:
+			# Directional recoil: the view is shoved away from the lane that landed, and rolls with side cuts.
+			game.camera.position+=game.camera.global_transform.basis*kick
+			game.camera.rotation.z+=roll
+			kick=kick.lerp(Vector3.ZERO,minf(delta*12,1))
+			roll=lerpf(roll,0,minf(delta*12,1))
+		if punch>0:
+			if game.camera.projection==Camera3D.PROJECTION_PERSPECTIVE: game.camera.fov+=punch*punch*6
+			punch=maxf(0,punch-delta*5)
+	hints.visible=active and not game.input_blocked and not game.menus.home
+	hints.modulate.a=clampf((13.0-fight_time)/2.5,0,1)
 	if not active:
 		enemy_label.text=("SWORDSMAN\nF  Spar   •   K  Combat skills" if respawn<=0 else "Resting…")
 	else:
@@ -1020,30 +1297,49 @@ func _process(delta: float) -> void:
 	enemy_label.modulate=Color(1,.42,.23) if active and foe.phase=="windup" else Color(.95,.85,.58)
 	enemy_label.visible=near_yard and not game.menus.home
 	if not active: return
+	var blink: bool=int(Time.get_ticks_msec()/180)%2==0
 	health_bar.max_value=hero.max_health
 	health_bar.value=hero.health
 	stamina_bar.max_value=hero.max_stamina
 	stamina_bar.value=hero.stamina
-	stamina_bar.modulate=Color(1,.6,.6) if winded(hero) and int(Time.get_ticks_msec()/180)%2==0 else Color.WHITE
 	hero_exhaust_bar.value=hero.exhaust
 	foe_health_bar.max_value=foe.max_health
 	foe_health_bar.value=foe.health
 	exhaustion_bar.value=foe.exhaust
+	for meter in [health_bar,stamina_bar,hero_exhaust_bar,foe_health_bar,exhaustion_bar]: settle(meter,delta)
+	foe_ghost=foe.health if foe_ghost<foe.health else lerpf(foe_ghost,foe.health,minf(delta*2.2,1))
+	stamina_bar.modulate=Color(1,.6,.6) if winded(hero) and blink else Color.WHITE
+	if stamina_flash>0: stamina_bar.modulate=Color(1,.35,.3)
+	health_bar.modulate=Color(1,.7,.7) if low and blink else Color.WHITE
+	exhaustion_bar.modulate=Color(1,.85,.6) if foe.exhaust>=75 and blink else Color.WHITE
+	you_caption.text="YOU   %d / %d"%[ceili(hero.health),hero.max_health]
+	foe_caption.text="SWORDSMAN   %d / %d"%[ceili(foe.health),foe.max_health]
 	var cue: String
+	var cue_color: Color=UiKit.PARCH
 	if salute>0: cue="Salute. The bout begins in a breath."
-	elif foe.phase=="windup": cue=("Feint! Now " if foe.flash>0 else "Incoming ")+RULES.DIRECTIONS[foe.attack_dir]+("  (heavy)" if foe.heavy else "")
-	elif foe.phase=="exhausted": cue="Guard broken. A heavy blow finishes."
-	elif foe.phase=="recovery" and foe.whiff: cue="He missed. Punish the recovery."
+	elif foe.phase=="windup":
+		cue=("Feint! Now " if foe.flash>0 else "Incoming ")+RULES.DIRECTIONS[foe.attack_dir]+("  (heavy)" if foe.heavy else "")
+		cue_color=Color(1,1,1) if foe.timer<=RULES.PERFECT_WINDOW else Color(1,.45,.3)
+	elif foe.phase=="exhausted":
+		cue="Guard broken. A heavy blow finishes."
+		cue_color=Color(1,.7,.35)
+	elif foe.phase=="recovery" and foe.whiff:
+		cue="He missed. Punish the recovery."
+		cue_color=UiKit.GOOD
+	elif hero.phase=="hurt": cue="Staggered."
 	elif foe.resting: cue="He is winded and giving ground."
-	else: cue="Enemy guard: "+RULES.DIRECTIONS[foe.guard]+("  ·  sharp, feint it" if foe.parry_ready else "")
+	else: cue="His guard: "+RULES.DIRECTIONS[foe.guard]+("  ·  sharp, feint it" if foe.parry_ready else "")
 	status.text=cue+"\nYour lane: "+RULES.DIRECTIONS[hero.guard]
-	if hero.counter>0: status.text="COUNTER WINDOW: "+RULES.DIRECTIONS[hero.counter_dir]+(" • critical" if has_skill("riposte") else " • quick riposte")
+	if hero.counter>0:
+		status.text="COUNTER WINDOW: "+RULES.DIRECTIONS[hero.counter_dir]+(" • critical" if has_skill("riposte") else " • quick riposte")
+		cue_color=UiKit.GOLD
+	status.add_theme_color_override("font_color",cue_color)
 	var progress: Dictionary=RULES.combo_progress(hero.chain)
 	var form_text := ""
 	if progress.step>0 and hero.chain_time>0:
 		var combo: Dictionary=progress.combo
 		form_text="\n%s: next %s"%[combo.name,RULES.DIRECTIONS[combo.steps[progress.step]]]
-	meters.text="HP %d/%d   Stamina %d/%d   Exhaustion %d\nSwordsman  HP %d/%d   Exhaustion %d/100\nLevel %d   XP %d/%d   Skill points %d%s"%[hero.health,hero.max_health,hero.stamina,hero.max_stamina,hero.exhaust,foe.health,foe.max_health,foe.exhaust,game.equipment.level,game.equipment.xp,RULES.xp_needed(game.equipment.level),game.equipment.skill_points,form_text]
+	meters.text="Level %d   XP %d/%d   Skill points %d%s"%[game.equipment.level,game.equipment.xp,RULES.xp_needed(game.equipment.level),game.equipment.skill_points,form_text]
 func open_skills() -> void:
 	if active: return
 	game.input_blocked=true
