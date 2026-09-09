@@ -180,7 +180,7 @@ func request_new() -> void:
 func reset_player(pos: Vector3) -> void:
 	game.player.activity = ""
 	game.player.activity_time = 0
-	game.player.collision_mask = 1
+	game.player.collision_mask = 5
 	game.player.velocity = Vector3.ZERO
 	game.player.position = pos
 	game.player.last_safe = pos
@@ -188,6 +188,7 @@ func reset_player(pos: Vector3) -> void:
 	game.camera_target = pos
 
 func new_game() -> void:
+	if is_instance_valid(game.combat) and game.combat.active: game.combat.stop("New game")
 	if is_instance_valid(intro) or (is_instance_valid(classroom) and classroom.active): return
 	release_classroom()
 	if is_instance_valid(game.research_menu):
@@ -250,10 +251,11 @@ func play_classroom(lesson := true) -> void:
 	overlay.add_child(classroom)
 
 func continue_game() -> void:
+	if is_instance_valid(game.combat) and game.combat.active: game.combat.stop("Visit restored")
 	var data := ConfigFile.new()
 	if data.load(save_path) != OK: return
 	var pos: Vector3 = data.get_value("hub","position",Vector3(0,.1,8.5))
-	if not pos.is_finite() or (pos.x < -19 or pos.x > 26) or absf(pos.z)>24 or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
+	if not pos.is_finite() or (pos.x < -19 or pos.x > 26) or (pos.z < -28 or pos.z > 24) or pos.y < -1 or pos.y > 5: pos = Vector3(0,.1,8.5)
 	reset_player(pos)
 	game.equipment.restore(data.get_value("equipment","state",{}))
 	game.research.restore(data.get_value("research","state",{}))
@@ -306,6 +308,10 @@ func _input(event: InputEvent) -> void:
 			set_fullscreen(DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_ESCAPE:
+			if is_instance_valid(game.combat) and game.combat.skill_panel.visible:
+				game.combat.close_skills()
+				get_viewport().set_input_as_handled()
+				return
 			if is_instance_valid(classroom) and classroom.active:
 				classroom.begin_roam()
 				get_viewport().set_input_as_handled()

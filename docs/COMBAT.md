@@ -1,0 +1,15 @@
+# Directional combat test
+
+The sparring yard is east of the school at (19, -19). Press F near the swordsman to start or stop. F6 from free hub movement teleports to the yard and begins practice. No sword purchase is required: an unequipped player borrows the Warden greatsword for the bout. Owned equipment is used if equipped. Loan equipment never enters the inventory.
+
+Controls: WASD movement, arrows select High/Right/Low/Left, LMB light, Q or Shift+LMB heavy, RMB guard, Space quickstep. Holding RMB and swiping the mouse also changes direction. The central indicator uses gold for the selected player lane, blue for the enemy guard and red for the incoming lane. K opens combat skills outside a bout; K or Escape closes it.
+
+Matching lanes block. A newly raised matching guard within 0.20 seconds of impact is perfect and costs no stamina. Held blocks cost 18 stamina against light attacks and 28 against heavies. Changing lanes does not reset timing; rapid taps have a 0.32-second rearm lock. Perfect blocks inflict 38 attacker exhaustion and provide a 1.05-second counter opportunity. The Turning edge skill makes an opposite-lane counter deal 65% more damage. An attack spends the one-strike counter opportunity even if it misses.
+
+Quickstep lasts 0.28 seconds, with invulnerability bounded to its middle 0.20 seconds. It uses normal character collision and costs 24 stamina, reduced to 19 by Economy of motion. Weapon stamina, speed, damage and upgrades apply to attacks. Armor protection reduces incoming damage. Research health, stamina and recovery bonuses remain additive with leveling.
+
+Exhaustion reaches 100 through perfect blocks and sustained pressure against a guard. It disables guard for three seconds and increases incoming damage by 50%. A guard without sufficient stamina breaks. Light hits do not cancel an already committed enemy attack. Attacks resolve once at the strike phase and only within 2.65 metres. This is a timing-and-range prototype, not per-triangle sword collision.
+
+A victory gives 60 XP and 25 gold. The first level requires 100 XP, increasing by 40 each level. Every level grants one skill point, six health, four stamina, four percent base weapon damage and one protection. Equipment's existing level gates use this same level. Two three-node combat branches mix passive benefits and conditional moves. Purchases, XP and skill learning use the existing transactional save path. Failed saves roll back rewards or skill purchases. Defeat and leaving the arena do not destroy equipment; the partner resets after three seconds.
+
+Verification: `--combat-test` uses an isolated data directory and checks directional outcomes, guard timing, quickstep, exhaustion, collision, input routing, rewards, level growth, prerequisites, critical direction and persisted skill data. It also captures third-person, first-person and skill-screen views. Menu and research regression suites were run after integration. Tuning remains provisional until the player's hands-on feedback.

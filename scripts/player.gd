@@ -19,7 +19,7 @@ const RUN_THRESHOLD := 3.3
 func _ready() -> void:
 	name = "UnarmedPlayer"
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 5
 	floor_snap_length = .4
 	var shape := CapsuleShape3D.new()
 	shape.radius = .28
@@ -67,17 +67,22 @@ func _physics_process(delta: float) -> void:
 		if input.length() > 0.1:
 			activity = ""
 			position = seat_exit
-			collision_mask = 1
+			collision_mask = 5
 		else: input = Vector2.ZERO
 	var direction := Vector3(input.x,0,input.y).rotated(Vector3.UP,game.yaw)
 	var speed := 5.6 if Input.is_action_pressed("run") else 2.0
-	velocity.x = move_toward(velocity.x,direction.x*speed,delta*24)
-	velocity.z = move_toward(velocity.z,direction.z*speed,delta*24)
+	var desired := direction*speed
+	if is_instance_valid(game.combat) and game.combat.active and not game.input_blocked: desired=game.combat.movement(direction,speed)
+	velocity.x = move_toward(velocity.x,desired.x,delta*80 if is_instance_valid(game.combat) and game.combat.active else delta*24)
+	velocity.z = move_toward(velocity.z,desired.z,delta*80 if is_instance_valid(game.combat) and game.combat.active else delta*24)
 	if activity != "sit":
 		velocity.y -= 20*delta
 		move_and_slide()
 	else: velocity = Vector3.ZERO
 	if direction.length() > .1: facing = atan2(direction.x,direction.z)
+	if is_instance_valid(game.combat) and game.combat.active:
+		var target: Vector3=game.combat.enemy.position-position
+		facing=atan2(target.x,target.z)
 	model.rotation.y = lerp_angle(model.rotation.y,facing,minf(delta*10,1))
 	var planar := Vector2(velocity.x,velocity.z).length()
 	var target_lean := 0.0
@@ -119,4 +124,4 @@ func act(id: String, target: Vector3, seconds: float) -> void:
 
 # Research stat bonuses are ready for the forthcoming combat system.
 func combat_stats() -> Dictionary:
-	return game.research.player_stats()
+	return game.combat.stats() if is_instance_valid(game.combat) else game.research.player_stats()

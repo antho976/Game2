@@ -4,7 +4,7 @@ var kit: HubKit
 var rng := RandomNumberGenerator.new()
 var grass_material: ShaderMaterial
 var tree_points: Array[Vector3] = []
-var hamlet_centers: Array[Vector3] = [Vector3(35,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(12,0,-27),Vector3(-13,0,-30)]
+var hamlet_centers: Array[Vector3] = [Vector3(35,0,7),Vector3(32,0,-4),Vector3(-33,0,-9),Vector3(14,0,-37),Vector3(-13,0,-37)]
 const POND := Vector3(-12,0,8.7)
 const GRASS_CHUNK := 8.0
 static var bark_shader: Shader
@@ -19,7 +19,7 @@ func build(hub: HubKit) -> void:
 		Vector3(-16.8,0,2.7),Vector3(-16.8,0,5.7),Vector3(-10.2,0,14.6),
 		Vector3(-4.3,0,13.8),Vector3(17.8,0,14.0),Vector3(20.2,0,12.2),
 		Vector3(28.5,0,6),Vector3(28.7,0,-.7),Vector3(20.5,0,-13.6),
-		Vector3(9.7,0,-14.4),Vector3(3.1,0,12.7),Vector3(-17.4,0,11.5)]
+		Vector3(-5.5,0,-22.5),Vector3(14,0,-25),Vector3(-12,0,-24),Vector3(3.1,0,12.7),Vector3(-17.4,0,11.5)]
 	for i in planting.size():
 		plant_tree(planting[i],rng.randf_range(.7,1.14),i)
 	# Uneven stands outside the walls, with openings, saplings and distant ridges.
@@ -27,10 +27,10 @@ func build(hub: HubKit) -> void:
 		var angle := rng.randf()*TAU
 		var radius := rng.randf_range(22,55)
 		var p := Vector3(cos(angle)*radius,0,sin(angle)*radius*.84)
-		if (p.x>-21 and p.x<28 and absf(p.z)<18) or outside_water(p) or (absf(p.x) < 4 and p.z < 0): continue
+		if (p.x>-21 and p.x<28 and p.z>-30 and p.z<18) or outside_water(p) or (absf(p.x) < 4 and p.z < 0): continue
 		if plantable(p): plant_tree(p,rng.randf_range(.65,1.65),i)
 	for i in 16:
-		conifer(Vector3(-34+i*4.5+rng.randf_range(-1,1),0,-23-rng.randf_range(0,13)),rng.randf_range(.8,1.5))
+		conifer(Vector3(-34+i*4.5+rng.randf_range(-1,1),0,-34-rng.randf_range(0,13)),rng.randf_range(.8,1.5))
 	pond()
 	plant_grass()
 	leaves()
@@ -46,7 +46,8 @@ func build(hub: HubKit) -> void:
 		flowers(p,int(absf(p.x)))
 
 func plant_tree(p: Vector3, size: float, index: int) -> void:
-	if absf(p.x-4.6)<7 and absf(p.z+12.2)<6: return
+	if p.distance_to(Vector3(19,0,-19))<8.5: return
+	if absf(p.x-4.6)<7 and absf(p.z+19.0)<7: return
 	p.y = terrain_height(p)
 	var tree := kit.asset("birch_tree" if index % 4 == 0 else "oak_tree",p)
 	tree.rotation.y = rng.randf()*TAU
@@ -56,11 +57,11 @@ func plant_tree(p: Vector3, size: float, index: int) -> void:
 	if index % 4 == 0: birch_root_material(tree)
 	kit.trees.append(tree)
 	tree_points.append(p)
-	if p.x > -19 and p.x < 26 and p.z > -16 and p.z < 15:
+	if p.x > -19 and p.x < 26 and p.z > -28 and p.z < 15:
 		kit.world.block(p+Vector3(0,1,0),Vector3(.65,2,.65)*size)
 
 func plantable(p: Vector3) -> bool:
-	if absf(p.x-4.6)<5.5 and absf(p.z+12.2)<5.3: return false
+	if absf(p.x-4.6)<5.5 and absf(p.z+19.0)<5.3: return false
 	if outside_water(p): return false
 	if absf(p.x+9.1)<1.8 and absf(p.z-8.2)<1.2: return false
 	for center in hamlet_centers:
@@ -439,7 +440,7 @@ func outside_water(p: Vector3) -> bool:
 	return absf(p.x-stream_x(p.z)) < 2.3 and absf(p.z) < 47
 
 func terrain_height(p: Vector3) -> float:
-	var distance := maxf(maxf(p.x-27,-p.x-20),absf(p.z)-17)
+	var distance := maxf(maxf(p.x-27,-p.x-20),maxf(p.z-17,-p.z-29))
 	if distance <= 0: return 0
 	var hills := 1.8+sin(p.x*.14+p.z*.05)*1.2+cos(p.z*.17-p.x*.08)*.8
 	if p.z < -23: hills += (1.0-smoothstep(-48,-23,p.z))*4
@@ -456,7 +457,7 @@ func build_outskirts() -> void:
 	for x in range(-48,48):
 		for z in range(-48,48):
 			var origin := Vector3(x*1.5,0,z*1.5)
-			if origin.x > -19 and origin.x < 26 and origin.z > -16 and origin.z < 15: continue
+			if origin.x > -19 and origin.x < 26 and origin.z > -28 and origin.z < 15: continue
 			for offset in [Vector3.ZERO,Vector3(1.5,0,0),Vector3(0,0,1.5),Vector3(1.5,0,0),Vector3(1.5,0,1.5),Vector3(0,0,1.5)]:
 				var p: Vector3 = origin+offset
 				p.y = terrain_height(p)+.008
@@ -512,7 +513,7 @@ void fragment() {
 	# Dressed near-field beds fill the visible strip just behind the village walls.
 	for i in 150:
 		var p := Vector3(rng.randf_range(-35,35),0,rng.randf_range(-29,29))
-		if p.x > -20.8 and p.x < 27.8 and absf(p.z) < 17.4: continue
+		if p.x > -20.8 and p.x < 27.8 and p.z > -29.4 and p.z < 17.4: continue
 		if outside_water(p) or (absf(p.x) < 3 and p.z < -16): continue
 		p.y = terrain_height(p)
 		var shrub := Node3D.new()

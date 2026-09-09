@@ -4,6 +4,9 @@ var game: Node
 var gold := 0
 var diamonds := 0
 var level := 1
+var xp := 0
+var skill_points := 0
+var combat_skills: Array[String] = []
 var inventory: Array[Dictionary] = []
 var equipped := {}
 var next_uid := 1
@@ -14,11 +17,16 @@ var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.randomize()
 func snapshot() -> Dictionary:
-	return {"version":2,"gold":gold,"diamonds":diamonds,"level":level,"inventory":inventory.duplicate(true),"equipped":equipped.duplicate(),"next_uid":next_uid,"survival_bonus":survival_bonus,"stat_bonus":stat_bonus}
+	return {"version":3,"xp":xp,"skill_points":skill_points,"combat_skills":combat_skills.duplicate(),"gold":gold,"diamonds":diamonds,"level":level,"inventory":inventory.duplicate(true),"equipped":equipped.duplicate(),"next_uid":next_uid,"survival_bonus":survival_bonus,"stat_bonus":stat_bonus}
 func restore(data: Dictionary) -> void:
 	gold = maxi(0,int(data.get("gold",0)))
 	diamonds = maxi(0,int(data.get("diamonds",0)))
 	level = maxi(1,int(data.get("level",1)))
+	xp = maxi(0,int(data.get("xp",0)))
+	skill_points = maxi(0,int(data.get("skill_points",level-1)))
+	combat_skills.clear()
+	for skill in CombatRules.skills():
+		if skill.id in data.get("combat_skills",[]) and (skill.before.is_empty() or skill.before in combat_skills): combat_skills.append(skill.id)
 	next_uid = maxi(1,int(data.get("next_uid",1)))
 	survival_bonus = clampf(float(data.get("survival_bonus",0)),0,1)
 	stat_bonus = maxf(0,float(data.get("stat_bonus",0)))
@@ -122,3 +130,27 @@ func upgrade(uid: int, expected_rank: int,quote: Dictionary = {}) -> Dictionary:
 			if equipped[slot]==uid: equipped.erase(slot)
 	error = commit(before)
 	return {"error":error,"survived":survived}
+
+func award_combat(amount: int,reward_gold: int) -> String:
+	var before := snapshot()
+	var old_level := level
+	xp+=maxi(0,amount)
+	gold+=maxi(0,reward_gold)
+	while xp>=CombatRules.xp_needed(level):
+		xp-=CombatRules.xp_needed(level)
+		level+=1
+		skill_points+=1
+	var error := commit(before)
+	if error.is_empty() and level>old_level: game.toast("Level %d. +%d skill point(s). Press K to learn combat skills."%[level,level-old_level])
+	return error
+func learn_combat(id: String) -> String:
+	for skill in CombatRules.skills():
+		if skill.id!=id: continue
+		if id in combat_skills: return "Already learned."
+		if skill_points<1: return "You need a skill point."
+		if not skill.before.is_empty() and not skill.before in combat_skills: return "Learn the preceding skill first."
+		var before := snapshot()
+		skill_points-=1
+		combat_skills.append(id)
+		return commit(before)
+	return "Unknown combat skill."

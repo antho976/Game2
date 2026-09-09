@@ -97,8 +97,9 @@ func build(target: HubWorld) -> void:
 	StaticBatcher.merge(self,BATCH_CHUNK)
 
 func on_path(p: Vector2) -> bool:
-	if absf(p.x-4.6)<5.15 and p.y>-17 and p.y< -7.45: return false
-	if absf(p.x-4.6)<.9 and p.y>=-7.45 and p.y< -4.4: return true
+	if p.distance_to(Vector2(19,-19))<3.8 or (absf(p.x-19)<.85 and p.y> -19 and p.y< -5): return true
+	if absf(p.x-4.6)<5.15 and p.y>-24 and p.y< -14.25: return false
+	if absf(p.x-4.6)<.9 and p.y>=-14.25 and p.y< -4.4: return true
 	var square: bool = Vector2(p.x/5.4,(p.y-.5)/5.8).length() < 1
 	var east_lane: bool = (p.x>10 and p.x<23 and absf(p.y-3.4)<1.25)
 	var road: bool = absf(p.x - (.45*sin(p.y*.32) if p.y > 5 else 0.0)) < 1.55 and p.y > -6.3 and p.y < 16
@@ -126,7 +127,7 @@ func build_ground() -> void:
 	for i in palette.size(): batches.append([])
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 193
-	for row in range(-45,45):
+	for row in range(-78,45):
 		for col in range(-39,54):
 			var p = Vector2(col*.49+(row%2)*.245,row*.36)
 			if not on_path(p): continue
@@ -248,36 +249,27 @@ func sparks() -> void:
 	particles.finished.connect(particles.queue_free)
 
 func build_boundaries() -> void:
-	# Continuous masonry base, overlapping coping, and planted buttresses close corners.
-	for edge_x in [-19.0,26.0]:
-		world.box(Vector3(edge_x,.48,-.5),Vector3(.72,.96,32),world.stone[2],true)
-	for z in [-16.0,15.0]:
-		if z==-16.0:
-			world.box(Vector3(-9.8,.48,z),Vector3(18.4,.96,.72),world.stone[2],true)
-			world.box(Vector3(18.0,.48,z),Vector3(16.7,.96,.72),world.stone[2],true)
-		else: world.box(Vector3(3.5,.48,z),Vector3(45.7,.96,.72),world.stone[2],true)
-	for edge_x in [-19.0,26.0]:
-		for i in 33:
-			var z := -16.0+i
-			world.box(Vector3(edge_x,1.02,z),Vector3(.87,.18,1.03),world.stone[i%6])
-	for z in [-16.0,15.0]:
-		for i in 46:
-			if z==-16.0 and -19+i> -1 and -19+i<10: continue
-			world.box(Vector3(-19+i,1.02,z),Vector3(1.03,.18,.87),world.stone[i%6])
+	# The school district is inside the same continuous, collidable enclosure.
+	const NORTH := -28.0
+	const SOUTH := 15.0
 	for x in [-19.0,26.0]:
-		for z in [-16.0,-8,0,8,15]:
+		world.box(Vector3(x,.48,(NORTH+SOUTH)*.5),Vector3(.72,.96,SOUTH-NORTH+.72),world.stone[2],true)
+		for i in 44:
+			world.box(Vector3(x,1.02,NORTH+i),Vector3(.87,.18,1.03),world.stone[i%6])
+		for z in [NORTH,-20,-12,-4,4,SOUTH]:
 			world.box(Vector3(x,.7,z),Vector3(1.08,1.4,1.08),world.stone[3],true)
 			world.box(Vector3(x,1.47,z),Vector3(1.2,.16,1.2),world.stone[5])
-
-	# Exposed courses break up the retaining face; the continuous core carries collision.
+	for z in [NORTH,SOUTH]:
+		world.box(Vector3(3.5,.48,z),Vector3(45.7,.96,.72),world.stone[2],true)
+		for i in 46:
+			world.box(Vector3(-19+i,1.02,z),Vector3(1.03,.18,.87),world.stone[i%6])
 	for row in 3:
 		for i in 46:
 			var x := -18.8+i*.98+(row%2)*.20
 			if x>26: continue
-			for z in [-16.0,15.0]:
-				if z==-16.0 and x> -1 and x<10: continue
+			for z in [NORTH,SOUTH]:
 				world.box(Vector3(x,.17+row*.29,z),Vector3(.91,.26,.78),world.stone[(i+row*2)%6])
-		for i in 32:
-			var z := -15.6+i*.98+(row%2)*.20
+		for i in 44:
+			var z := NORTH+.4+i*.98+(row%2)*.20
 			for x in [-19.0,26.0]:
 				world.box(Vector3(x,.17+row*.29,z),Vector3(.78,.26,.91),world.stone[(i+row*2)%6])

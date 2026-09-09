@@ -3,7 +3,7 @@ var room: Node3D
 var teacher: Node3D
 var pupils: Array[Node3D] = []
 var camera: Camera3D
-const ORIGIN := Vector3(4.6,.06,-12.2)
+const ORIGIN := Vector3(4.6,.06,-19.0)
 func _ready() -> void:
 	name="Schoolhouse"
 	position=ORIGIN
@@ -110,7 +110,10 @@ func build_room() -> void:
 	add_child(building)
 	collider(Vector3(0,-.07,0),Vector3(10,.14,9.5))
 	collider(Vector3(0,1.8,-4.6),Vector3(10,3.6,.22))
-	collider(Vector3(5,1.8,0),Vector3(.22,3.6,9.5))
+	collider(Vector3(5,.5,0),Vector3(.22,1,9.5))
+	collider(Vector3(5,3.35,0),Vector3(.22,.7,9.5))
+	for span in [[-4.0,1.3],[-.65,2.1],[3.3,2.8]]:
+		collider(Vector3(5,2,span[0]),Vector3(.22,2,span[1]))
 	collider(Vector3(-5,.5,0),Vector3(.22,1,9.5))
 	collider(Vector3(-5,3.35,0),Vector3(.22,.7,9.5))
 	for span in [[-4.0,1.3],[-.65,2.1],[3.3,2.8]]:

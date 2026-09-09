@@ -45,6 +45,19 @@ func run(game: Node) -> void:
 	check(not space.intersect_ray(PhysicsRayQueryParameters3D.create(origin+Vector3(-4,.5,-2.5),origin+Vector3(-5.5,.5,-2.5),1)).is_empty(),"Wall beneath window blocks movement")
 	check(not space.intersect_ray(PhysicsRayQueryParameters3D.create(origin+Vector3(0,2,0),origin+Vector3(0,4,0),1)).is_empty(),"Solid ceiling completes room")
 	check(space.intersect_ray(PhysicsRayQueryParameters3D.create(origin+Vector3(2.7,.5,-3.0),origin+Vector3(2.7,.5,-4.3),1)).is_empty(),"Former boundary wall no longer crosses school")
+	for x in [-17.0,0.0,4.6,16.0,24.0]:
+		check(not space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x,.5,-27),Vector3(x,.5,-29),1)).is_empty(),"Expanded northern wall stays continuous at "+str(x))
+	check(space.intersect_ray(PhysicsRayQueryParameters3D.create(origin+Vector3(-6,1.8,-2.5),origin+Vector3(-9,1.8,-2.5),1)).is_empty(),"Window has yard space beyond the school")
+	var saved_mode=game.camera_mode
+	game.camera_mode=1
+	game.camera_height=1.7
+	menu.reset_player(origin+Vector3(0,.12,3.3))
+	game.update_camera(.016)
+	check(is_equal_approx(game.camera.position.y-game.player.position.y,1.7),"First person keeps selected eye height inside")
+	menu.reset_player(origin+Vector3(0,.12,5.7))
+	game.update_camera(.016)
+	check(is_equal_approx(game.camera.position.y-game.player.position.y,1.7),"First person keeps selected eye height outside")
+	game.camera_mode=saved_mode
 	menu.reset_player(origin+Vector3(-3.7,.12,-2.5))
 	game.yaw=PI/2
 	await wait(.2)
@@ -65,6 +78,16 @@ func run(game: Node) -> void:
 	Input.action_release("up")
 	await wait(.2)
 	check(game.school.contains(game.player.position),"Player can reenter school")
+	game.input_blocked=true
+	game.camera.make_current()
+	game.camera.projection=Camera3D.PROJECTION_ORTHOGONAL
+	game.camera.size=35
+	game.camera.position=Vector3(24,24,3)
+	game.camera.look_at(Vector3(4,0,-17))
+	game.set_process(false)
+	await shot("district")
+	game.set_process(true)
+	game.input_blocked=false
 	menu.play_classroom(false)
 	check(menu.classroom.mode=="questions","Teacher remains available afterwards")
 	menu.classroom.begin_roam()

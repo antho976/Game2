@@ -21,10 +21,18 @@ func shot(id: String) -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("res://captures/research_"+id+".png")
+func start_hub(game: Node) -> void:
+	game.menus.new_game()
+	if is_instance_valid(game.menus.intro): game.menus.intro.finish()
+	if is_instance_valid(game.menus.classroom): game.menus.classroom.begin_roam()
+	game.menus.release_classroom()
+	game.menus.story_stage="done"
+	game.input_blocked=false
+
 func run(game: Node) -> void:
 	await get_tree().create_timer(1).timeout
 	game.research.set_process(false)
-	game.menus.new_game()
+	start_hub(game)
 	var r=game.research
 	var gear=game.equipment
 	r.finished.connect(func(_message): notifications+=1)
@@ -87,7 +95,7 @@ func run(game: Node) -> void:
 	r.advance(120,true)
 	check(absf(r.projects.vitality.remaining-50)<.001,"Offline speed improvement starts at its actual completion time")
 	# An existing item keeps every earned gain when potency research completes.
-	game.menus.new_game()
+	start_hub(game)
 	r.set_process(false)
 	fund(game)
 	gear.buy("warden_blade")
@@ -131,7 +139,7 @@ func run(game: Node) -> void:
 	gear.restore(legacy)
 	check(is_equal_approx(gear.owned(1).earned_gain,.3),"Legacy upgraded items migrate without losing earned stats")
 	# Native visual checks use isolated test saves only.
-	game.menus.new_game()
+	start_hub(game)
 	r.set_process(false)
 	fund(game)
 	r.start("conditioning")
@@ -165,9 +173,9 @@ func run(game: Node) -> void:
 	check(not r.journal[0].unread,"Journal notifications can be acknowledged")
 	game.research_menu.close()
 	check(not game.input_blocked,"Leaving research restores player control")
-	game.menus.new_game()
+	start_hub(game)
 	check(r.completed.is_empty() and r.projects.is_empty() and r.slots()==2,"New Game resets research and slots")
-	DirAccess.remove_absolute(game.menus.save_path)
-	DirAccess.remove_absolute(game.menus.settings_path)
+	game.menus.release_classroom()
+	await get_tree().create_timer(.5).timeout
 	print("RESEARCH CHECKS COMPLETE: ",failures," failure(s)")
 	get_tree().quit(1 if failures else 0)

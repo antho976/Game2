@@ -33,19 +33,39 @@ var nearest_pos := Vector3.ZERO
 var muted := false
 var menus: CanvasLayer
 var village_day: Node
+var combat: Node3D
 var equipment: Node
 var smith_shop: CanvasLayer
 var research: Node
 var research_menu: CanvasLayer
 var school: Node3D
 var was_in_school := false
+var doorway_fade: TextureRect
+
+func blend_doorway_view() -> void:
+	# Keep first person continuous. Blend the previous view for other projections.
+	camera_target = player.position+Vector3(0,1 if camera_mode==2 else .1,0)
+	if camera_mode==1 or input_blocked or DisplayServer.get_name()=="headless": return
+	if is_instance_valid(doorway_fade): doorway_fade.queue_free()
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	doorway_fade = TextureRect.new()
+	doorway_fade.texture = ImageTexture.create_from_image(get_viewport().get_texture().get_image())
+	doorway_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	doorway_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(doorway_fade)
+	var tween := create_tween()
+	tween.tween_property(doorway_fade,"modulate:a",0.0,.32)
+	tween.tween_callback(layer.queue_free)
+
 func inside_school() -> bool:
 	return is_instance_valid(school) and is_instance_valid(player) and school.contains(player.position)
 
 
 func _ready() -> void:
-	test_mode = "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
-	for spec in [["left",KEY_A,KEY_LEFT],["right",KEY_D,KEY_RIGHT],["up",KEY_W,KEY_UP],["down",KEY_S,KEY_DOWN],["run",KEY_SHIFT],["interact",KEY_F]]:
+	test_mode = "--combat-test" in OS.get_cmdline_user_args() or "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	for spec in [["left",KEY_A],["right",KEY_D],["up",KEY_W],["down",KEY_S],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
 			var e := InputEventKey.new()
@@ -115,6 +135,9 @@ func _ready() -> void:
 	research_menu = preload("res://scripts/research_menu.gd").new()
 	research_menu.game = self
 	add_child(research_menu)
+	combat=preload("res://scripts/combat.gd").new()
+	combat.game=self
+	add_child(combat)
 	if not test_mode and not "--capture" in OS.get_cmdline_user_args(): menus.show_home()
 	play_ambient("amb_hub_air_01",-23)
 	play_ambient("music_hub_01",-25)
@@ -124,6 +147,10 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--combat-test" in OS.get_cmdline_user_args():
+		var suite=load("res://tests/combat_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--school-test" in OS.get_cmdline_user_args():
 		var suite = load("res://tests/school_test.gd").new()
 		add_child(suite)
@@ -255,6 +282,7 @@ func _process(delta: float) -> void:
 	elapsed += delta
 	if was_in_school != inside_school():
 		was_in_school = inside_school()
+		blend_doorway_view()
 		sync_camera_mouse()
 	update_camera(delta)
 	notice_time = maxf(0,notice_time-delta)
@@ -275,7 +303,7 @@ func update_camera(delta: float) -> void:
 		camera.position = camera_target+Vector3(0,19,15).rotated(Vector3.UP,yaw)
 		camera.look_at(camera_target)
 		return
-	if inside_school() and not title and not overview:
+	if inside_school() and camera_mode!=1 and not title and not overview:
 		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 		camera.fov = 75
 		camera.near = .04
@@ -294,7 +322,7 @@ func update_camera(delta: float) -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE if camera_mode==2 else Camera3D.PROJECTION_ORTHOGONAL
 	camera.fov = camera_fov
 	camera.near = .1
-	camera.size = camera_zoom
+	camera.size = minf(camera_zoom,13.0) if is_instance_valid(combat) and combat.active else camera_zoom
 	var desired := camera_target+Vector3(0,camera_height,camera_distance).rotated(Vector3.UP,yaw)
 	if camera_mode==2:
 		var query := PhysicsRayQueryParameters3D.create(camera_target,desired,1,[player.get_rid()])
@@ -305,6 +333,10 @@ func update_camera(delta: float) -> void:
 
 func update_interaction() -> void:
 	nearest = ""
+	if is_instance_valid(combat) and (combat.active or player.position.distance_to(combat.CENTER)<4.5):
+		nearest="sparring"
+		prompt.text="F  ·  End sparring" if combat.active else "F  ·  Spar with the swordsman     K  ·  Combat skills"
+		return
 	if inside_school():
 		if player.position.distance_to(school.teacher.global_position)<2.8:
 			nearest="teacher"
@@ -341,6 +373,10 @@ func update_interaction() -> void:
 	prompt.text = "Move to stand up" if player.activity == "sit" else (text if player.activity_time <= 0 else "")
 
 func interact() -> void:
+	if nearest=="sparring":
+		if combat.active: combat.stop("Sparring ended.")
+		else: combat.start()
+		return
 	if player.activity_time > 0 or player.activity == "sit": return
 	if nearest=="teacher":
 		if is_instance_valid(menus.classroom): menus.classroom.ask()
@@ -387,10 +423,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_M:
 				muted = not muted
 				AudioServer.set_bus_mute(0,muted)
+			KEY_F6:
+				if not combat.active:
+					player.position=combat.CENTER+Vector3(0,.1,2)
+					player.last_safe=player.position
+					camera_target=player.position
+					combat.start()
 			KEY_R:
 				player.activity = ""
 				player.activity_time = 0
-				player.collision_mask = 1
+				player.collision_mask = 5
 				player.velocity = Vector3.ZERO
 				player.position = Vector3(0,.1,8.5)
 
@@ -422,7 +464,7 @@ func capture() -> void:
 		else:
 			player.activity = ""
 			player.activity_time = 0
-			player.collision_mask = 1
+			player.collision_mask = 5
 			player.position = Vector3(7.2,.05,11.2) if action == "sit" else Vector3(8.25,.05,8.1)
 			activities.interact(action)
 			target = player.position+Vector3(0,.6,0)
