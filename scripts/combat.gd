@@ -4,7 +4,7 @@ extends Node3D
 # combat_choreo.gd and the execution cinematic in combat_cinematic.gd; this node runs the bout,
 # the partner, the engagement and the feedback layer (hit-stop, shake, sparks, trails, numbers, sound).
 # There is no transition into a fight: the swordsman squares up when he sees the player, and a
-# swing thrown near him starts the bout mid-cut.
+# swing thrown near him starts the bout mid-cut. In encounter mode the expedition owns engagement.
 const CENTER := Vector3(19,0,-19)
 const RULES = preload("res://scripts/combat_rules.gd")
 const REACH := 2.65
@@ -13,6 +13,14 @@ const SIGHT := 5.2 # He squares up when the player comes this close in front of 
 const ENGAGE := 6.0 # A swing thrown this close to him starts the bout.
 var game: Node
 var active := false
+signal encounter_finished(won: bool,health: float)
+signal encounter_disengaged(health: float,enemy_health: float)
+var encounter_mode := false
+var pending_sheath:=false
+var encounter_origin := CENTER
+var encounter_rank := 1
+var encounter_health := -1.0
+var remaining_enemy_health := -1.0
 var hero: Dictionary
 var foe: Dictionary
 var profile: Dictionary
@@ -59,16 +67,17 @@ var buffer_time := 0.0
 var respawn := 0.0
 var hitstop := 0.0
 var shake := 0.0
+var salute := 0.0
 var fight_time := 0.0
 var last_result := ""
 var foe_swings := 0
-var armed := false # The player's sword is out, in a bout or not.
-var sheathe_timer := 0.0 # Out of a bout, the sword goes back after a pause.
+var sheathe_timer := 0.0 # Out of a bout in the yard, the sword goes back after a pause.
 var truce := 0.0 # After a bout ends he lets the player walk off before he squares up again.
 var tier := "normal" # Which opponent the yard fields: grunt, normal or boss.
 var clock := 0.0
 var cinematic # combat_cinematic.gd
 var weak_marker: MeshInstance3D # The mark on his body while he is exhausted.
+var glint_texture: GradientTexture2D
 # Impact feedback: lane flashes, reticle pulses, camera recoil, slow motion and blood.
 var hit_lane := 0
 var hit_flash := 0.0
@@ -85,7 +94,7 @@ var foe_ghost := 0.0
 var ghosts := {} # Meter -> the pale bar that drains after it.
 var splats: Array = []
 var splat_texture: GradientTexture2D
-var glint_texture: GradientTexture2D
+var player_hud: Control
 var you_caption: Label
 var foe_caption: Label
 var flash_rect: ColorRect
@@ -93,10 +102,10 @@ var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.seed=60908
 	splat_texture=soft_disc(Color(.30,.02,.02,.95),Color(.30,.02,.02,.72),.55)
-	glint_texture=soft_disc(Color(1,1,1,1),Color(1,1,1,.5),.3)
 	hero=RULES.state(100,100)
 	foe=RULES.state(140,100)
 	profile=RULES.partner(1,tier)
+	glint_texture=soft_disc(Color(1,1,1,1),Color(1,1,1,.5),.3)
 	audio=preload("res://scripts/combat_audio.gd").new()
 	audio.game=game
 	add_child(audio)
@@ -106,6 +115,9 @@ func _ready() -> void:
 	build_yard()
 	build_hud()
 func build_yard() -> void:
+	if not encounter_mode: build_training_floor()
+	build_enemy()
+func build_training_floor() -> void:
 	# Open training yard, well away from shops, animals and the school doorway.
 	var floor := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
@@ -124,8 +136,9 @@ func build_yard() -> void:
 		# Corner posts mark the square the swordsman keeps to.
 		var angle := PI/4+i*PI/2
 		game.world.box(CENTER+Vector3(cos(angle)*4.3,.55,sin(angle)*4.3),Vector3(.09,.55,.09),game.world.wood,true)
+func build_enemy() -> void:
 	enemy=CharacterBody3D.new()
-	enemy.name="SparringSwordsman"
+	enemy.name="TitheWarden" if encounter_mode else "SparringSwordsman"
 	enemy.collision_layer=4
 	enemy.collision_mask=3
 	enemy.position=CENTER+Vector3(0,.1,-1.0)
@@ -137,12 +150,15 @@ func build_yard() -> void:
 	collider.shape=capsule
 	collider.position.y=.86
 	enemy.add_child(collider)
-	enemy_model=load("res://assets/village/player_refined.glb").instantiate()
+	enemy_model=load("res://assets/dungeon/first_portal/warden.glb" if encounter_mode else "res://assets/village/player_refined.glb").instantiate()
 	enemy.add_child(enemy_model)
-	GearVisuals.apply(enemy_model,{"chest":GearCatalog.find("warden_chest"),"gloves":GearCatalog.find("warden_gloves"),"boots":GearCatalog.find("warden_boots")})
+	if not encounter_mode: GearVisuals.apply(enemy_model,{"chest":GearCatalog.find("warden_chest"),"gloves":GearCatalog.find("warden_gloves"),"boots":GearCatalog.find("warden_boots")})
 	enemy_animation=enemy_model.find_children("*","AnimationPlayer",true,false)[0]
 	play_enemy("idle")
-	enemy_sword=make_sword(enemy_model,0)
+	if encounter_mode:
+		enemy_sword=load("res://assets/dungeon/first_portal/mining_blade.glb").instantiate()
+		enemy_model.add_child(enemy_sword)
+	else: enemy_sword=make_sword(enemy_model,0)
 	enemy_stance=add_stance(enemy_model)
 	enemy_grip=add_grip(enemy_model,enemy_sword)
 	enemy_trail=add_trail(enemy_sword)
@@ -171,9 +187,13 @@ func build_yard() -> void:
 	weak_marker.hide()
 	enemy.add_child(weak_marker)
 	pose_sword(enemy_sword,foe,0)
+	if encounter_mode:
+		enemy.hide()
+		enemy.collision_layer=0
 func make_sword(parent: Node3D,style: int) -> Node3D:
 	var root := Node3D.new()
 	root.name="CombatGreatsword"
+	root.set_meta("player_weapon",parent==game.player.model)
 	parent.add_child(root)
 	var builder := GearVisuals.new()
 	builder.steel=GearVisuals.material(Color(.43,.48,.50) if style==0 else Color(.16,.20,.23),.78)
@@ -217,19 +237,36 @@ func winded(fighter: Dictionary) -> bool: return fighter.stamina<fighter.max_sta
 func lock_yaw() -> float:
 	var offset: Vector3=game.player.position-enemy.position
 	return atan2(offset.x,offset.z)
+func begin_encounter(pos: Vector3,rank: int,health: float,foe_health := -1.0) -> void:
+	assert(encounter_mode)
+	encounter_origin=pos
+	encounter_rank=rank
+	encounter_health=health
+	remaining_enemy_health=foe_health
+	respawn=0
+	enemy.position=pos
+	enemy.collision_layer=4
+	enemy.show()
+	start()
+func clear_strike_path() -> bool:
+	var query:=PhysicsRayQueryParameters3D.create(game.player.position+Vector3.UP,enemy.position+Vector3.UP,1)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 # The bout begins where everyone stands: no teleport, no salute, no banner. If the player is
 # already mid-swing the swing carries into the fight.
 func start() -> void:
 	if active or respawn>0 or game.input_blocked: return
 	var values=stats()
-	profile=RULES.partner(game.equipment.level,tier)
-	var swing: Dictionary=hero.duplicate() if armed and hero.phase=="windup" else {}
+	profile=RULES.partner(encounter_rank if encounter_mode else game.equipment.level,"normal" if encounter_mode else tier)
+	var swing: Dictionary=hero.duplicate() if game.sword_drawn and hero.phase=="windup" else {}
 	var lane: int=int(hero.get("guard",0))
 	hero=RULES.state(values.health,values.stamina)
 	hero.guard=lane
 	if not swing.is_empty():
 		for key in ["phase","timer","total","attack_dir","guard","heavy","swoosh","feinted","whiff","from_guard"]: hero[key]=swing.get(key,hero[key])
 	foe=RULES.state(profile.health,100)
+	if encounter_mode:
+		hero.health=clampf(encounter_health,1,hero.max_health)
+		if remaining_enemy_health>0: foe.health=minf(remaining_enemy_health,foe.max_health)
 	foe.block_age=99.0
 	foe.blocking=true
 	active=true
@@ -238,6 +275,7 @@ func start() -> void:
 	dodge_recent=0
 	hitstop=0
 	shake=0
+	salute=0
 	fight_time=0
 	truce=0
 	buffered=-1
@@ -255,52 +293,77 @@ func start() -> void:
 	game.player.activity_time=0
 	game.player.collision_mask=5
 	enemy_model.show()
-	draw()
+	var drawn: bool=game.sword_drawn
+	if not encounter_mode: game.sword_drawn=true
+	if not drawn or not is_instance_valid(hero_sword): refresh_weapon()
+	if not drawn: audio.play("sword_draw",game.player.position+Vector3.UP*1.3,-10)
 	audio.play("sword_draw",enemy.position+Vector3.UP*1.3,-12,.94)
 	audio.play("foe_effort",enemy.position+Vector3.UP*1.5,-16,.9)
 	game.audio.loop("combat_music","music_combat_layer",null,-22,{"bus":"Music","fade_in":true,"fade":1.5})
-# The player's sword comes out: in a bout, or for a swing thrown outside one.
+	game.sync_camera_mouse()
+# The player's sword comes out for a swing thrown outside a bout.
 func draw() -> void:
-	if armed: return
-	armed=true
+	if game.sword_drawn: return
+	game.sword_drawn=true
 	sheathe_timer=0
-	if is_instance_valid(hero_sword): hero_sword.queue_free()
-	if is_instance_valid(hero_stance): hero_stance.queue_free()
-	if is_instance_valid(hero_grip): hero_grip.queue_free()
-	if is_instance_valid(hero_trail): hero_trail.queue_free()
+	refresh_weapon()
+	if game.sword_drawn: audio.play("sword_draw",game.player.position+Vector3.UP*1.3,-10)
+func sheathe() -> void:
+	if not game.sword_drawn or active: return
+	game.sword_drawn=false
+	sheathe_timer=0
+	hero.phase="idle"
+	hero.blocking=false
+	refresh_weapon()
+	audio.play("sword_sheathe",game.player.position+Vector3.UP*1.3,-12)
+# Can a swing be thrown right now, outside a bout, by this combat instance?
+func can_draw() -> bool:
+	return game.combat==self and not game.input_blocked and not game.menus.home and not game.overview and not game.inside_school() and game.player.activity.is_empty() and not skill_panel.visible
+func clear_weapon() -> void:
+	for node in [hero_grip,hero_stance,hero_sword,hero_trail,hands_trail]:
+		if is_instance_valid(node):
+			if node is Node3D:node.hide()
+			node.queue_free()
+	hero_grip=null
+	hero_stance=null
+	hero_sword=null
+	hero_trail=null
+	hands_trail=null
+func refresh_weapon() -> void:
+	clear_weapon()
+	if not active:hero.phase="idle"
+	var owned: bool=game.equipment.equipped.has("weapon")
+	if not owned and not (active and not encounter_mode):game.sword_drawn=false
+	for mount in game.player.model.find_children("GearMountChest*","BoneAttachment3D",true,false):
+		for child in mount.get_children():
+			for blade in child.get_children():
+				if blade is Node3D and blade.position.y>1.55:blade.visible=not game.sword_drawn
+	var hands=game.camera.get_node_or_null("FirstPersonHands")
+	if hands:hands.set_weapon(weapon() if game.sword_drawn else {})
+	if not game.sword_drawn:return
 	hero_sword=make_sword(game.player.model,int(weapon().style))
 	hero_stance=add_stance(game.player.model)
 	hero_grip=add_grip(game.player.model,hero_sword)
 	hero_trail=add_trail(hero_sword)
-	for mount in game.player.model.find_children("GearMountChest*","BoneAttachment3D",true,false):
-		# Only hide the back-mounted sword, not chest armor.
-		for child in mount.get_children():
-			for blade in child.get_children():
-				if blade is Node3D and blade.position.y>1.55: blade.hide()
-	var hands=game.camera.get_node_or_null("FirstPersonHands")
 	if hands:
-		hands.set_weapon(weapon())
-		if is_instance_valid(hands_trail): hands_trail.queue_free()
 		var held=hands.get_node_or_null("HeldGreatsword")
-		if held: hands_trail=add_trail(held)
-	audio.play("sword_draw",game.player.position+Vector3.UP*1.3,-10)
-func sheathe() -> void:
-	if not armed or active: return
-	armed=false
-	sheathe_timer=0
-	hero.phase="idle"
+		if held:hands_trail=add_trail(held)
+	pose_sword(hero_sword,hero,0)
+func toggle_weapon() -> void:
+	if active and (hero.phase!="idle" or dodge_time>0):
+		pending_sheath=not pending_sheath
+		return
+	if not game.sword_drawn and not game.equipment.equipped.has("weapon") and not (active and not encounter_mode):
+		say("Equip a greatsword first. The blacksmith offers your starting blade.")
+		return
+	game.sword_drawn=not game.sword_drawn
 	hero.blocking=false
-	if is_instance_valid(hero_grip): hero_grip.queue_free()
-	if is_instance_valid(hero_stance): hero_stance.queue_free()
-	if is_instance_valid(hero_sword): hero_sword.queue_free()
-	if is_instance_valid(hero_trail): hero_trail.queue_free()
-	if is_instance_valid(hands_trail): hands_trail.queue_free()
-	game.refresh_equipment()
-	audio.play("sword_sheathe",game.player.position+Vector3.UP*1.3,-12)
-# Can a swing be thrown right now, outside a bout?
-func can_draw() -> bool:
-	return not game.input_blocked and not game.menus.home and not game.overview and not game.inside_school() and game.player.activity.is_empty() and not skill_panel.visible
+	guard_held=false
+	buffered=-1
+	refresh_weapon()
+	audio.play("sword_draw" if game.sword_drawn else "sword_sheathe",game.player.position+Vector3.UP*1.3,-10)
 func stop(reason: String) -> void:
+	pending_sheath=false
 	if not active: return
 	if cinematic.active(): cinematic.finish()
 	active=false
@@ -308,16 +371,25 @@ func stop(reason: String) -> void:
 	hero.phase="idle"
 	dodge_time=0
 	hitstop=0
+	salute=0
+	weak_marker.hide()
+	if not encounter_mode:
+		sheathe_timer=2.2
+		truce=6.0
 	game.player.collision_mask=5
 	game.player.velocity=Vector3.ZERO
-	sheathe_timer=2.2
-	truce=6.0
+	if is_instance_valid(hero_grip): hero_grip.queue_free()
+	if is_instance_valid(hero_stance): hero_stance.queue_free()
+	if is_instance_valid(hero_sword): hero_sword.queue_free()
+	if is_instance_valid(hero_trail): hero_trail.queue_free()
+	if is_instance_valid(hands_trail): hands_trail.queue_free()
+	game.refresh_equipment()
 	respawn=3.0
 	foe=RULES.state(profile.health,100)
-	weak_marker.hide()
 	game.audio.stop("combat_music",2.0)
 	game.audio.stop("winded",.4)
-	say(reason)
+	game.sync_camera_mouse()
+	if not reason.is_empty(): say(reason)
 func say(text: String) -> void:
 	message=text
 	message_time=2.5
@@ -351,6 +423,7 @@ func slow_motion(scale: float,seconds: float) -> void:
 	get_tree().create_timer(seconds,true,false,true).timeout.connect(func():
 		if Time.get_ticks_msec()>=slow_until-5: Engine.time_scale=1.0)
 func _exit_tree() -> void:
+	clear_weapon()
 	Engine.time_scale=1.0
 func set_guard(direction: int) -> void:
 	if hero.phase=="windup" and active:
@@ -375,6 +448,7 @@ func feint(fighter: Dictionary,direction: int,is_hero: bool) -> bool:
 	audio.play("feint",(game.player.position if is_hero else enemy.position)+Vector3.UP*1.3,-14)
 	return true
 func block(pressed: bool) -> void:
+	if pressed and not game.sword_drawn:return
 	if not active or cinematic.active(): return
 	guard_held=pressed
 	if pressed and hero.phase=="windup" and not hero.feinted and RULES.progress(hero)<RULES.PULL_LIMIT and dodge_time<=0:
@@ -398,9 +472,14 @@ func attack(heavy: bool) -> bool:
 	if not active:
 		# A swing outside a bout: the sword comes out, and if he is near enough the fight is on.
 		if not can_draw(): return false
-		draw()
-		sheathe_timer=3.0
-		if respawn<=0 and game.player.position.distance_to(enemy.position)<ENGAGE and hero.phase=="idle": start()
+		if not encounter_mode and respawn<=0 and hero.phase=="idle" and game.player.position.distance_to(enemy.position)<ENGAGE: start()
+		elif not game.sword_drawn:
+			if not game.equipment.equipped.has("weapon"):
+				say("Equip a greatsword first. The blacksmith offers your starting blade.")
+				return false
+			draw()
+		if not active and not encounter_mode: sheathe_timer=3.0
+	if not game.sword_drawn: return false
 	if hero.phase!="idle" or dodge_time>0:
 		if hero.phase=="recovery" and hero.timer<.22:
 			buffered=1 if heavy else 0
@@ -476,15 +555,25 @@ func _notification(what: int) -> void:
 		hero.blocking=false
 		guard_held=false
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and not game.input_blocked:
+		if event.physical_keycode==KEY_X:
+			toggle_weapon()
+			get_viewport().set_input_as_handled()
+			return
+		if event.physical_keycode==KEY_T:
+			game.lock_enabled=not game.lock_enabled
+			if game.lock_enabled and active and encounter_mode:
+				var point: Vector2=game.get_viewport().get_mouse_position() if game.camera_mode in [0,3] else game.get_viewport().get_visible_rect().size*.5
+				var candidate: int=game.expedition.aim_target(point)
+				if candidate>=0:game.expedition.switch_target(candidate,true)
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_K:
 		if skill_panel.visible: close_skills()
 		elif not active and not game.input_blocked and not game.menus.home: open_skills()
 		get_viewport().set_input_as_handled()
 		return
-	if game.input_blocked or cinematic.active(): return
-	if not active:
-		# Outside a bout only a swing is listened for, and only once the interface has had its say.
-		return
+	if not active or game.input_blocked or cinematic.active(): return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var direction := [KEY_UP,KEY_RIGHT,KEY_DOWN,KEY_LEFT].find(event.physical_keycode)
 		if direction>=0: set_guard(direction)
@@ -501,17 +590,32 @@ func _input(event: InputEvent) -> void:
 			game.sync_camera_mouse()
 			attack(Input.is_key_pressed(KEY_SHIFT))
 			get_viewport().set_input_as_handled()
-	if event is InputEventMouseMotion:
-		# Holding guard, the mouse steers the blade. Outside first person the free mouse does too.
-		var free_aim: bool=game.camera_mode!=1 and not game.inside_school()
-		if hero.blocking or free_aim:
-			swipe+=event.relative
-			swipe_idle=.25
-			var threshold: float=24.0 if hero.blocking else 38.0
-			if swipe.length()>threshold:
-				set_guard((1 if swipe.x>0 else 3) if absf(swipe.x)>absf(swipe.y) else (2 if swipe.y>0 else 0))
-				swipe=Vector2.ZERO
-			if hero.blocking: get_viewport().set_input_as_handled()
+	if event is InputEventMouseMotion: steer(event.relative)
+# The mouse picks the lane. With a free cursor (overhead views) the lane is simply where the
+# cursor sits around the opponent, so nothing is lost at a screen edge. With the mouse captured
+# (first and third person) a short flick picks it: the flick is measured against its own
+# direction, so reversing from one side to the other reads at once instead of first having to
+# unwind the last one. A swing already in the air only feints on a deliberate, longer flick.
+func steer(relative: Vector2) -> void:
+	if Input.mouse_mode!=Input.MOUSE_MODE_CAPTURED:
+		var camera: Camera3D=game.camera
+		var chest: Vector3=enemy.position+Vector3(0,1.15,0)
+		if camera.is_position_behind(chest): return
+		var offset: Vector2=get_viewport().get_mouse_position()-camera.unproject_position(chest)
+		if offset.length()<28: return
+		var lane: int=(1 if offset.x>0 else 3) if absf(offset.x)>absf(offset.y) else (2 if offset.y>0 else 0)
+		if hero.phase=="windup" and relative.length()<6: return
+		if lane!=hero.guard: set_guard(lane)
+		return
+	if swipe.length()>1 and swipe.normalized().dot(relative.normalized())<0: swipe=Vector2.ZERO
+	swipe+=relative
+	swipe_idle=.18
+	var threshold: float=64.0 if hero.phase=="windup" else 18.0
+	if swipe.length()>threshold:
+		var lane: int=(1 if swipe.x>0 else 3) if absf(swipe.x)>absf(swipe.y) else (2 if swipe.y>0 else 0)
+		swipe=Vector2.ZERO
+		if lane!=hero.guard or hero.phase=="windup": set_guard(lane)
+	if hero.blocking: get_viewport().set_input_as_handled()
 func _unhandled_input(event: InputEvent) -> void:
 	# A swing thrown outside a bout. Buttons and menus see the click first.
 	if active or game.input_blocked or cinematic.active() or not can_draw(): return
@@ -519,6 +623,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if attack(Input.is_key_pressed(KEY_SHIFT)): get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_Q:
 		if attack(true): get_viewport().set_input_as_handled()
+func parry_cue_active() -> bool:
+	# One cue for the actual timing window, never an early planned feint or recovery.
+	return active and foe.phase=="windup" and foe.timer>0 and foe.timer<=RULES.PERFECT_WINDOW and not foe.get("feint_plan",false)
 func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 	if fighter.phase=="cinematic": return
 	fighter.block_age+=delta
@@ -526,6 +633,7 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 	fighter.regen_delay=maxf(0,fighter.regen_delay-delta)
 	fighter.pain=maxf(0,fighter.pain-delta*4)
 	fighter.flash=maxf(0,fighter.flash-delta)
+	fighter.spark=maxf(0,fighter.get("spark",0.0)-delta)
 	fighter.raise=maxf(0,fighter.get("raise",0.0)-delta)
 	if fighter.chain_time>0:
 		fighter.chain_time-=delta
@@ -552,17 +660,17 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 				ribbon.life=.30 if fighter.heavy else .22
 				ribbon.width=.8 if fighter.heavy else .55
 				ribbon.color=(Color(1,.95,.75) if fighter.heavy else Color(1,.92,.72)) if is_hero else (Color(1,.5,.35) if fighter.heavy else Color(1,.62,.45))
-			if not is_hero and is_instance_valid(enemy_sword): glint(enemy_sword.to_global(Vector3(0,1.25,0)),Color(1,.6,.4))
-		if not is_hero and fighter.timer<=RULES.PERFECT_WINDOW and not fighter.get("cued",false):
-			# The last fifth of a second before impact: a guard raised now is a perfect one.
-			fighter.cued=true
-			audio.play("tick",enemy.position+Vector3.UP*1.3,-17)
+			# The cut is in the air: a spark on his blade says a guard raised now will meet it.
+			if not is_hero: fighter.spark=.16
 		if not is_hero and fighter.get("feint_plan",false) and progress>=.45:
 			fighter.feint_plan=false
 			var open: Array=[]
 			for lane in 4:
 				if lane!=fighter.attack_dir and lane!=hero.guard: open.append(lane)
 			feint(fighter,open[rng.randi_range(0,open.size()-1)],false)
+		if not is_hero and parry_cue_active() and not fighter.get("cued",false):
+			fighter.cued=true
+			audio.play("tick",enemy.position+Vector3.UP*1.3,-12)
 	if fighter.timer>0: return
 	if fighter.phase=="windup":
 		fighter.phase="recovery"
@@ -641,6 +749,10 @@ func resolve_hit(from_hero: bool) -> String:
 		attacker.combo=""
 		last_result="miss"
 		return "miss"
+	if encounter_mode and not clear_strike_path():
+		attacker.chain.clear()
+		last_result="obstructed"
+		return "obstructed"
 	if not from_hero and dodge_time>.055 and dodge_time<.255:
 		say("Evaded")
 		show_banner("EVADED",Color(.75,.9,1))
@@ -893,6 +1005,14 @@ func end_execution() -> void:
 	decision=1.2
 	if foe.health<=0: finish(true)
 func finish(hero_won: bool) -> void:
+	if encounter_mode:
+		var health: float=hero.health
+		show_banner("WARDEN FALLEN" if hero_won else "DEFEATED",Color(1,.8,.5))
+		game.audio.play_2d("victory_stinger" if hero_won else "defeat_stinger",-8,{"bus":"Music"})
+		if hero_won:audio.play("foe_kneel",enemy.position,-12)
+		stop("Warden defeated. Its haul is unbanked." if hero_won else "Defeated. The expedition haul is lost.")
+		encounter_finished.emit(hero_won,health)
+		return
 	if hero_won:
 		var previous_level: int=game.equipment.level
 		var xp := 60
@@ -934,6 +1054,9 @@ func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe.regen_delay=.8
 	audio.play("foe_effort",enemy.position+Vector3.UP*1.5,-16 if heavy else -19,.92 if heavy else 1.0)
 func _physics_process(delta: float) -> void:
+	if pending_sheath and hero.phase=="idle" and dodge_time<=0 and not game.input_blocked:
+		pending_sheath=false
+		toggle_weapon()
 	respawn=maxf(0,respawn-delta)
 	message_time=maxf(0,message_time-delta)
 	buffer_time=maxf(0,buffer_time-delta)
@@ -944,30 +1067,40 @@ func _physics_process(delta: float) -> void:
 		cinematic.step(delta)
 		return
 	if not active:
-		idle_partner(delta)
-		if armed:
-			# A sword out with nobody to fight: swings still play, then it goes back on the shoulder.
+		if game.sword_drawn and not game.input_blocked and game.combat==self:
+			# A sword out with nobody to fight: swings still play, then, in the yard, it goes back.
 			tick(hero,delta,true)
 			pose_sword(hero_sword,hero,delta)
 			posture(hero,hero_stance,-1.0)
 			var hands=game.camera.get_node_or_null("FirstPersonHands")
 			var held=hands.get_node_or_null("HeldGreatsword") if hands and hands.visible else null
 			if held: pose_sword(held,hero,delta,true)
-			if hero.phase=="idle":
+			if not encounter_mode and hero.phase=="idle" and sheathe_timer>0:
 				sheathe_timer-=delta
 				if sheathe_timer<=0: sheathe()
+		if encounter_mode:
+			pose_sword(enemy_sword,foe,delta)
+			if is_instance_valid(enemy_stance): enemy_stance.pose({},4)
+			return
+		idle_partner(delta)
 		return
 	if game.input_blocked:
 		hero.blocking=false
 		return
-	if game.player.position.distance_to(CENTER)>6:
+	if encounter_mode and game.player.position.distance_to(encounter_origin)>10 and not (game.lock_mode==1 and game.lock_enabled):
+		var health: float=hero.health
+		var enemy_health: float=foe.health
+		stop("The Warden withdraws toward its post.")
+		encounter_disengaged.emit(health,enemy_health)
+		return
+	if not encounter_mode and game.player.position.distance_to(CENTER)>6:
 		stop("You left the training yard.")
 		return
 	var toward: Vector3=game.player.position-enemy.position
 	toward.y=0
 	var distance: float=toward.length()
-	if game.camera_mode in [1,2]:
-		# A soft lock keeps the duel framed; the mouse can still nudge the view.
+	if game.camera_mode in [1,2] and game.lock_mode==1 and game.lock_enabled:
+		# Hard lock retains the target; aim lock leaves the camera under user control.
 		game.yaw=lerp_angle(game.yaw,lock_yaw(),minf(delta*5,1))
 		if game.camera_mode==1: game.camera_pitch=lerpf(game.camera_pitch,atan2(-.35,maxf(distance,1)),minf(delta*1.5,1))
 	if hitstop>0:
@@ -1003,8 +1136,8 @@ func _physics_process(delta: float) -> void:
 	if hands and hands.visible:
 		var held=hands.get_node_or_null("HeldGreatsword")
 		if held: pose_sword(held,hero,delta,true)
-# Between bouts he keeps his ground, turns to watch whoever comes near, and squares up the moment
-# the player is close enough in front of him. Beaten, he stays down on a knee until he is ready.
+# Between bouts in the yard he keeps his ground, turns to watch whoever comes near, and squares up
+# the moment the player is close enough in front of him. Beaten, he stays down until he is ready.
 func idle_partner(delta: float) -> void:
 	fallen=maxf(0,fallen-delta)
 	var toward: Vector3=game.player.position-enemy.position
@@ -1051,6 +1184,8 @@ func partner_ai(delta: float,toward: Vector3,distance: float) -> void:
 		# He drives into his own cut once it is committed, closing the last of the measure.
 		if RULES.progress(foe)>=.62 and distance>1.25: step=forward*(2.6 if foe.heavy else 2.0)
 		elif distance>1.7: step=forward*.7
+	if encounter_mode and distance>1.8 and not clear_strike_path() and foe.phase=="idle":
+		step=game.expedition.chase_direction(enemy.position,game.player.position)*1.6
 	var knock: Vector3=foe.get("knock",Vector3.ZERO)
 	foe.knock=knock.move_toward(Vector3.ZERO,delta*6)
 	enemy.velocity=step+knock
@@ -1108,7 +1243,7 @@ const WEAK_SPOT := [Vector3(0,1.62,.14),Vector3(.26,1.34,.12),Vector3(0,.98,.20)
 # screen space and mirrored onto the rig: x flips for the player's own model, z for the
 # first-person sword that hangs in front of the camera.
 func pose_sword(sword: Node3D,fighter: Dictionary,delta: float,first_person := false) -> void:
-	if not is_instance_valid(sword): return
+	if not is_instance_valid(sword) or not sword.is_inside_tree(): return
 	if fighter.phase=="cinematic": return
 	var breath: float=sin(clock*2.1)
 	var pose: Dictionary=CombatChoreo.blade(fighter,RULES.progress(fighter),breath,clock)
@@ -1237,29 +1372,6 @@ func soft_disc(core: Color,mid: Color,mid_at: float) -> GradientTexture2D:
 	texture.width=64
 	texture.height=64
 	return texture
-# A white flare at the blade tip the instant a cut commits: the moment to read it.
-func glint(pos: Vector3,color := Color(1,1,1)) -> void:
-	var flare := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size=Vector2(.24,.24)
-	var material := StandardMaterial3D.new()
-	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.blend_mode=BaseMaterial3D.BLEND_MODE_ADD
-	material.billboard_mode=BaseMaterial3D.BILLBOARD_ENABLED
-	material.albedo_texture=glint_texture
-	material.albedo_color=color
-	material.no_depth_test=true
-	quad.material=material
-	flare.mesh=quad
-	flare.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	flare.position=pos
-	flare.scale=Vector3.ONE*.4
-	add_child(flare)
-	var tween := create_tween().set_parallel(true)
-	tween.tween_property(flare,"scale",Vector3.ONE*1.7,.16).set_ease(Tween.EASE_OUT)
-	tween.tween_property(material,"albedo_color:a",0.0,.2)
-	tween.chain().tween_callback(flare.queue_free)
 # A cut that lands throws blood away from the blade and leaves a mark on the yard.
 func blood(pos: Vector3,away: Vector3,heavy: bool) -> void:
 	var spray := CPUParticles3D.new()
@@ -1323,31 +1435,9 @@ func build_hud() -> void:
 	hud=CanvasLayer.new()
 	hud.layer=20
 	add_child(hud)
-	var panel := PanelContainer.new()
-	panel.position=Vector2(24,142)
-	panel.custom_minimum_size=Vector2(340,0)
-	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	panel.add_theme_stylebox_override("panel",UiKit.flat(Color(.035,.045,.043,.9),Color(.60,.47,.25),1))
-	hud.add_child(panel)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation",5)
-	panel.add_child(column)
-	status=Label.new()
-	status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	status.add_theme_font_size_override("font_size",16)
-	column.add_child(status)
-	you_caption=caption(column,"YOU")
-	health_bar=bar(column,Color(.80,.32,.26),10)
-	stamina_bar=bar(column,Color(.28,.64,.43),7)
-	hero_exhaust_bar=bar(column,Color(.94,.57,.24),4)
-	foe_caption=caption(column,"SWORDSMAN")
-	foe_health_bar=bar(column,Color(.80,.32,.26),10)
-	exhaustion_bar=bar(column,Color(.94,.57,.24),4)
-	meters=Label.new()
-	meters.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	meters.add_theme_font_size_override("font_size",12)
-	meters.modulate=UiKit.MUTED
-	column.add_child(meters)
+	player_hud=preload("res://scripts/combat_hud.gd").new()
+	player_hud.combat=self
+	hud.add_child(player_hud)
 	var compass=preload("res://scripts/combat_compass.gd").new()
 	compass.combat=self
 	compass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1365,7 +1455,7 @@ func build_hud() -> void:
 	# Controls live along the bottom edge and fade once the first exchanges are over.
 	hints=Label.new()
 	hints.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	hints.text="LMB Light   Q Heavy   RMB Guard   Space Quickstep   Arrows / swipe: lane\nGold triangle: your lane   Blue: his guard   Red: incoming, white: guard now   Perfect parry freezes his guard: strike another lane\nStagger bar full: a heavy into the mark is an execution   Forms: Left Right High  ·  Low High Low"
+	hints.text="LMB Light   Q Heavy   RMB Guard   Space Quickstep   Arrows / swipe: lane\nSwipe mid-swing: feint   RMB mid-swing: pull   Gold: your lane   Blue: his guard   Red: incoming, ring turns white: guard now\nForms: Left Right High  ·  Low High Low"
 	hints.add_theme_font_size_override("font_size",13)
 	hints.add_theme_color_override("font_shadow_color",Color(0,0,0,.8))
 	hints.add_theme_constant_override("shadow_offset_x",1)
@@ -1431,8 +1521,8 @@ func settle(meter: ProgressBar,delta: float) -> void:
 	if ghost.value<meter.value: ghost.value=meter.value
 	else: ghost.value=lerpf(ghost.value,meter.value,minf(delta*2.2,1))
 func _process(delta: float) -> void:
-	var near_yard: bool=game.player.position.distance_to(CENTER)<8
-	hud.get_child(0).visible=active and not game.input_blocked and not cinematic.active()
+	var near_yard: bool=active if encounter_mode else game.player.position.distance_to(CENTER)<8
+	player_hud.refresh(delta)
 	banner_time=maxf(0,banner_time-delta)
 	banner.modulate.a=clampf(banner_time*2.2,0,1)
 	hurt_flash=maxf(0,hurt_flash-delta*1.6)
@@ -1460,14 +1550,14 @@ func _process(delta: float) -> void:
 		if punch>0:
 			if game.camera.projection==Camera3D.PROJECTION_PERSPECTIVE: game.camera.fov+=punch*punch*6
 			punch=maxf(0,punch-delta*5)
-	hints.visible=active and not game.input_blocked and not game.menus.home
+	hints.visible=false
 	hints.modulate.a=clampf((13.0-fight_time)/2.5,0,1)
 	if not active:
 		enemy_label.text=(str(profile.title).to_upper()+"\nK  Combat skills" if respawn<=0 else "Resting…")
 	else:
-		enemy_label.text=(("FEINT  ·  "+RULES.DIRECTIONS[foe.attack_dir]) if foe.flash>0 and foe.phase=="windup" else ("ATTACK: "+RULES.DIRECTIONS[foe.attack_dir])) if foe.phase=="windup" else ("EXHAUSTED  ·  MARK "+RULES.DIRECTIONS[foe.weak].to_upper() if foe.phase=="exhausted" and foe.weak>=0 else ("OPEN  ·  guard stuck "+RULES.DIRECTIONS[foe.guard] if foe.phase=="open" else ("Winded" if foe.resting else ("Guard: "+RULES.DIRECTIONS[foe.guard]+("  ·  sharp" if foe.parry_ready else "")))))
-	enemy_label.modulate=Color(1,.42,.23) if active and foe.phase=="windup" else (Color(1,.8,.45) if active and foe.phase=="exhausted" else Color(.95,.85,.58))
-	enemy_label.visible=near_yard and not game.menus.home and not cinematic.active()
+		enemy_label.text=(("FEINT  ·  "+RULES.DIRECTIONS[foe.attack_dir]) if foe.flash>0 and foe.phase=="windup" else ("ATTACK: "+RULES.DIRECTIONS[foe.attack_dir])) if foe.phase=="windup" else ("EXHAUSTED" if foe.phase=="exhausted" else ("Winded" if foe.resting else ("Guard: "+RULES.DIRECTIONS[foe.guard]+("  ·  sharp" if foe.parry_ready else ""))))
+	enemy_label.modulate=Color(1,.42,.23) if active and foe.phase=="windup" else Color(.95,.85,.58)
+	enemy_label.visible=near_yard and not active and not encounter_mode and not game.menus.home
 	if not active: return
 	var blink: bool=int(Time.get_ticks_msec()/180)%2==0
 	health_bar.max_value=hero.max_health
@@ -1484,8 +1574,8 @@ func _process(delta: float) -> void:
 	if stamina_flash>0: stamina_bar.modulate=Color(1,.35,.3)
 	health_bar.modulate=Color(1,.7,.7) if low and blink else Color.WHITE
 	exhaustion_bar.modulate=Color(1,.85,.6) if foe.exhaust>=75 and blink else Color.WHITE
-	you_caption.text="YOU   %d / %d"%[ceili(hero.health),hero.max_health]
-	foe_caption.text="%s   %d / %d   ·   STAGGER %d"%[str(profile.title).to_upper(),ceili(foe.health),foe.max_health,roundi(foe.exhaust)]
+	you_caption.text="HEALTH   %d / %d"%[ceili(hero.health),hero.max_health]
+	foe_caption.text=("WARDEN   %d / %d   ·   STAGGER %d" if encounter_mode else str(profile.title).to_upper()+"   %d / %d   ·   STAGGER %d")%[ceili(foe.health),foe.max_health,roundi(foe.exhaust)]
 	var cue: String
 	var cue_color: Color=UiKit.PARCH
 	if foe.phase=="windup":
@@ -1503,7 +1593,7 @@ func _process(delta: float) -> void:
 	elif hero.phase=="hurt": cue="Staggered."
 	elif foe.resting: cue="He is winded and giving ground."
 	else: cue="His guard: "+RULES.DIRECTIONS[foe.guard]+("  ·  sharp, feint it" if foe.parry_ready else "")
-	status.text=cue+"\nYour lane: "+RULES.DIRECTIONS[hero.guard]
+	status.text=cue+"   ·   Your lane: "+RULES.DIRECTIONS[hero.guard]
 	if hero.counter>0:
 		status.text="COUNTER WINDOW: "+RULES.DIRECTIONS[hero.counter_dir]+(" • critical" if has_skill("riposte") else " • quick riposte")
 		cue_color=UiKit.GOLD
@@ -1512,7 +1602,7 @@ func _process(delta: float) -> void:
 	var form_text := ""
 	if progress.step>0 and hero.chain_time>0:
 		var combo: Dictionary=progress.combo
-		form_text="\n%s: next %s"%[combo.name,RULES.DIRECTIONS[combo.steps[progress.step]]]
+		form_text="   ·   %s: next %s"%[combo.name,RULES.DIRECTIONS[combo.steps[progress.step]]]
 	meters.text="Level %d   XP %d/%d   Skill points %d%s"%[game.equipment.level,game.equipment.xp,RULES.xp_needed(game.equipment.level),game.equipment.skill_points,form_text]
 func open_skills() -> void:
 	if active: return
