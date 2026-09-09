@@ -45,6 +45,7 @@ Shop checks: `./play.fish -- --shop-test`. This uses isolated saves and test-onl
 - `docs/REUSED_ASSETS.md`: source provenance.
 - `docs/STORY.md`: story direction.
 - `docs/SYSTEMS.md`: progression requirements awaiting implementation.
+- `docs/AUDIO.md`: every sound the game needs, by trigger, with what already exists.
 - `docs/PERFORMANCE.md`: why the hub was renderer-bound and how batching fixed it without changing the picture.
 
 ```fish
