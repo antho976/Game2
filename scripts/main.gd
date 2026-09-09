@@ -9,6 +9,9 @@ var prompt: Label
 var notice: Label
 var notice_time := 0.0
 var title: Label
+var sword_drawn:=false
+var lock_mode:=0 # Aim-follow or hard target.
+var lock_enabled:=true
 var camera_mode := 0 # Overhead, first person, third person, far overhead.
 var camera_distance := 15.0
 var camera_height := 19.0
@@ -18,7 +21,8 @@ var camera_pitch := 0.0
 var camera_sensitivity := .003
 
 func sync_camera_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (camera_mode==1 or inside_school()) and not input_blocked else Input.MOUSE_MODE_VISIBLE
+	var duel: bool = is_instance_valid(combat) and combat.active and camera_mode==2 and not combat.cinematic.active()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (camera_mode==1 or inside_school() or duel) and not input_blocked else Input.MOUSE_MODE_VISIBLE
 
 var yaw := 0.0
 var camera_target := Vector3(0,0,7)
@@ -33,8 +37,11 @@ var nearest_pos := Vector3.ZERO
 var muted := false
 var menus: CanvasLayer
 var village_day: Node
+var expedition: Node3D
+var hub_subtitle: Label
 var combat: Node3D
 var equipment: Node
+var inventory_menu: CanvasLayer
 var smith_shop: CanvasLayer
 var research: Node
 var research_menu: CanvasLayer
@@ -64,7 +71,7 @@ func inside_school() -> bool:
 
 
 func _ready() -> void:
-	test_mode = "--interaction-test" in OS.get_cmdline_user_args() or "--combat-test" in OS.get_cmdline_user_args() or "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
+	test_mode = "--targeting-test" in OS.get_cmdline_user_args() or "--inventory-test" in OS.get_cmdline_user_args() or "--expedition-test" in OS.get_cmdline_user_args() or "--expedition-capture" in OS.get_cmdline_user_args() or "--interaction-test" in OS.get_cmdline_user_args() or "--combat-test" in OS.get_cmdline_user_args() or "--school-test" in OS.get_cmdline_user_args() or "--research-test" in OS.get_cmdline_user_args() or "--shop-test" in OS.get_cmdline_user_args() or "--refresh-test" in OS.get_cmdline_user_args() or "--work-test" in OS.get_cmdline_user_args() or "--camera-test" in OS.get_cmdline_user_args() or "--player-visual" in OS.get_cmdline_user_args() or "--self-test" in OS.get_cmdline_user_args() or "--menu-test" in OS.get_cmdline_user_args() or "--polish-test" in OS.get_cmdline_user_args() or "--routine-test" in OS.get_cmdline_user_args() or "--village-capture" in OS.get_cmdline_user_args() or "--cleanup-test" in OS.get_cmdline_user_args()
 	for spec in [["left",KEY_A],["right",KEY_D],["up",KEY_W],["down",KEY_S],["run",KEY_SHIFT],["interact",KEY_F]]:
 		InputMap.add_action(spec[0])
 		for code in spec.slice(1):
@@ -141,6 +148,12 @@ func _ready() -> void:
 	combat=preload("res://scripts/combat.gd").new()
 	combat.game=self
 	add_child(combat)
+	expedition=preload("res://scripts/dungeon/expedition.gd").new()
+	expedition.game=self
+	add_child(expedition)
+	inventory_menu=preload("res://scripts/inventory_menu.gd").new()
+	inventory_menu.game=self
+	add_child(inventory_menu)
 	if not test_mode and not "--capture" in OS.get_cmdline_user_args(): menus.show_home()
 	audio.loop("music","music_hub",null,-25,{"bus":"Music"})
 	audio.loop("pond","amb_pond",Vector3(-12,.5,8.7),-17,{"max_distance":12})
@@ -151,6 +164,18 @@ func _ready() -> void:
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
 		add_child(probe)
+	if "--targeting-test" in OS.get_cmdline_user_args():
+		var suite=load("res://tests/targeting_test.gd").new()
+		add_child(suite)
+		suite.run(self)
+	if "--inventory-test" in OS.get_cmdline_user_args():
+		var suite=load("res://tests/inventory_test.gd").new()
+		add_child(suite)
+		suite.run(self)
+	if "--expedition-test" in OS.get_cmdline_user_args() or "--expedition-capture" in OS.get_cmdline_user_args():
+		var suite=load("res://tests/expedition_test.gd").new()
+		add_child(suite)
+		suite.run(self)
 	if "--interaction-test" in OS.get_cmdline_user_args():
 		var suite=load("res://tests/interaction_test.gd").new()
 		add_child(suite)
@@ -239,7 +264,7 @@ func build_ui() -> void:
 	ui = CanvasLayer.new()
 	add_child(ui)
 	title = label("THE VILLAGE",16,Color(.95,.91,.78),Vector2(30,25))
-	label("A quiet place to return to",13,Color(.83,.85,.79),Vector2(30,49))
+	hub_subtitle=label("A quiet place to return to",13,Color(.83,.85,.79),Vector2(30,49))
 	prompt = label("",20,Color(1,.96,.82),Vector2.ZERO)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -264,6 +289,9 @@ func _process(delta: float) -> void:
 	# Menus, the shop, the archive and the lesson pull the village behind a low-pass.
 	audio.set_ducked((input_blocked and not (is_instance_valid(menus) and menus.home)) or (is_instance_valid(combat) and combat.skill_panel.visible))
 	update_camera(delta)
+	if is_instance_valid(combat):
+		prompt.offset_top=-124
+		prompt.offset_bottom=-84
 	notice_time = maxf(0,notice_time-delta)
 	notice.modulate.a = minf(notice_time,1)
 	if input_blocked: return
@@ -319,6 +347,15 @@ func update_camera(delta: float) -> void:
 	camera.look_at(camera_target)
 
 func update_interaction() -> void:
+	if is_instance_valid(expedition):
+		if expedition.active:
+			nearest="expedition"
+			prompt.text=expedition.interaction_text()
+			return
+		if expedition.at_gate():
+			nearest="mine_portal"
+			prompt.text="F  ·  Enter the Spent Works"
+			return
 	nearest = ""
 	if is_instance_valid(combat) and (combat.active or player.position.distance_to(combat.CENTER)<4.5):
 		nearest="sparring"
@@ -374,6 +411,12 @@ func update_interaction() -> void:
 	prompt.text = "Move to stand up" if player.activity == "sit" else (text if player.activity_time <= 0 else "")
 
 func interact() -> void:
+	if nearest=="expedition":
+		expedition.interact()
+		return
+	if nearest=="mine_portal":
+		expedition.enter()
+		return
 	if nearest=="sparring":
 		if not combat.active: combat.start()
 		return
@@ -413,12 +456,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: adjust_camera_zoom(1)
 	if event is InputEventMouseMotion:
 		if (camera_mode==1 or inside_school()) and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
-			yaw -= event.relative.x*camera_sensitivity
-			camera_pitch = clampf(camera_pitch-event.relative.y*camera_sensitivity,-1.35,1.35)
-		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE): yaw -= event.relative.x*.006
+			if not (combat.active and lock_mode==1 and lock_enabled): yaw -= event.relative.x*camera_sensitivity
+			if not (combat.active and lock_mode==1 and lock_enabled): camera_pitch = clampf(camera_pitch-event.relative.y*camera_sensitivity,-1.35,1.35)
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE) and not (combat.active and lock_mode==1 and lock_enabled): yaw -= event.relative.x*.006
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_TAB:
+				if is_instance_valid(expedition) and expedition.active:return
 				overview = not overview
 				camera.size = 46 if overview else 23
 			KEY_H: ui.visible = not ui.visible
@@ -427,12 +471,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				AudioServer.set_bus_mute(0,muted)
 				if not muted: audio.ui("ui_click")
 			KEY_F6:
+				if is_instance_valid(expedition) and expedition.active:return
 				if not combat.active:
 					player.position=combat.CENTER+Vector3(0,.1,2)
 					player.last_safe=player.position
 					camera_target=player.position
 					combat.start()
 			KEY_R:
+				if is_instance_valid(expedition) and expedition.active:return
 				player.activity = ""
 				player.activity_time = 0
 				player.collision_mask = 5
@@ -499,4 +545,5 @@ func refresh_equipment() -> void:
 	var hands = camera.get_node_or_null("FirstPersonHands") if is_instance_valid(camera) else null
 	if hands!=null and is_instance_valid(hands.arms):
 		GearVisuals.apply(hands.arms,{"gloves":loadout.gloves} if loadout.has("gloves") else {})
-		hands.set_weapon(loadout.get("weapon",{}))
+		hands.set_weapon(loadout.get("weapon",{}) if sword_drawn else {})
+	if is_instance_valid(combat) and combat.is_inside_tree():combat.refresh_weapon()

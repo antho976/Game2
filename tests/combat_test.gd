@@ -19,8 +19,28 @@ func run(game: Node) -> void:
 	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	c.start()
 	c.set_physics_process(false)
+	for heavy in [false,true]:
+		c.foe=CombatRules.state(140,100)
+		c.foe.phase="windup"
+		c.foe.heavy=heavy
+		c.foe.total=.65 if heavy else .34
+		c.foe.timer=CombatRules.PERFECT_WINDOW+.001
+		check(not c.parry_cue_active(),"No early parry spark for "+("heavy" if heavy else "light"))
+		c.foe.timer=CombatRules.PERFECT_WINDOW
+		check(c.parry_cue_active(),"Red spark starts at the exact perfect-parry boundary")
+		c.foe.feint_plan=true
+		check(not c.parry_cue_active(),"A planned feint cannot falsely signal parry now")
+		c.foe.feint_plan=false
+		c.foe.timer=.001
+		check(c.parry_cue_active(),"Spark stays visible until impact")
+		c.foe.timer=0
+		check(not c.parry_cue_active(),"Spark ends at impact")
+		c.foe.timer=.1
+		c.foe.phase="hurt"
+		check(not c.parry_cue_active(),"Interrupting a strike immediately removes its parry cue")
+	c.foe=CombatRules.state(140,100)
 	check(c.active and game.equipment.inventory.is_empty(),"Practice loan starts combat without adding inventory")
-	check(c.armed and is_instance_valid(c.hero_sword) and c.fight_time==0,"The bout begins where the player stands with the sword drawn and no salute")
+	check(game.sword_drawn and is_instance_valid(c.hero_sword) and c.fight_time==0,"The bout begins where the player stands with the sword drawn and no salute")
 	for direction in 4:
 		check(CombatRules.defence(direction,direction,true,.1,0,18)=="perfect","Matching timely guard works in lane "+str(direction))
 		check(CombatRules.defence(direction,(direction+1)%4,true,.1,100,18)=="hit","Wrong direction never blocks")
@@ -301,9 +321,11 @@ func run(game: Node) -> void:
 	c.set_physics_process(false)
 	c.respawn=0
 	c.truce=0
-	check(not c.armed and not is_instance_valid(c.hero_sword),"The sword goes back on the shoulder after a bout")
+	check(not game.sword_drawn and not is_instance_valid(c.hero_sword),"The sword goes back on the shoulder after a bout")
 	game.player.position=c.CENTER+Vector3(0,.1,7)
-	check(c.attack(false) and c.armed and not c.active and c.hero.phase=="windup","A swing thrown away from him draws the sword without starting a bout")
+	check(not c.attack(false) and not game.sword_drawn,"A swing away from him with no sword owned only asks for one")
+	game.equipment.claim_starter()
+	check(c.attack(false) and game.sword_drawn and not c.active and c.hero.phase=="windup","A swing thrown away from him draws the owned sword without starting a bout")
 	c.hero.phase="idle"
 	c.sheathe()
 	game.player.position=c.CENTER+Vector3(0,.1,1.6)
@@ -319,11 +341,12 @@ func run(game: Node) -> void:
 	game.player.position=c.CENTER+Vector3(0,.1,2.5)
 	await wait(1.2)
 	c.set_physics_process(false)
-	check(c.active and c.fight_time>0 and c.armed,"He squares up the moment he sees the player and the bout is on")
+	check(c.active and c.fight_time>0 and game.sword_drawn,"He squares up the moment he sees the player and the bout is on")
 	c.stop("Visual check")
 	c.respawn=0
 	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	c.start()
+	game.lock_mode=1
 	game.camera_mode=2
 	game.camera_distance=4.2
 	game.camera_height=2.5
@@ -465,7 +488,7 @@ func run(game: Node) -> void:
 	c.set_physics_process(true)
 	await wait(.6)
 	c.set_physics_process(false)
-	check(absf(wrapf(game.yaw-c.lock_yaw(),-PI,PI))<.6,"Third person softly locks the view onto the swordsman")
+	check(absf(wrapf(game.yaw-c.lock_yaw(),-PI,PI))<.6,"Third person hard-locks the view onto the swordsman")
 	c.enemy.position=c.CENTER+Vector3(0,.1,-1)
 	game.player.position=c.CENTER+Vector3(0,.1,1.6)
 	game.camera_mode=1
