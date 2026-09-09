@@ -116,6 +116,21 @@ func on_path(p: Vector2) -> bool:
 	var practice: bool = p.distance_to(Vector2(9.5,8)) < 3.1 or (absf(p.x-7.2) < .85 and p.y > 3.4 and p.y < 10.5)
 	return (p.distance_to(Vector2(5.4,10.5)) < 1.7) or p.distance_to(Vector2(21.5,3.5)) < 3.2 or east_lane or dock_lane or west_door or research_lane or square or road or work_lane or home_lane or doorstep or yard or pond_walk or practice
 
+## What the ground is made of at a point, for footsteps: cobble, grass, dirt, stone or wood.
+func surface_at(p: Vector3) -> String:
+	if world.game.inside_school(): return "wood"
+	var flat := Vector2(p.x,p.z)
+	# The pond's earthen shore and the worked soil around the vegetable beds.
+	var pond := Vector2((p.x+12.0)/4.7,(p.z-8.7)/3.5)
+	if pond.length() < 1: return "dirt"
+	for bed in [Vector2(10,8.3),Vector2(13.3,7.8)]:
+		if absf(flat.x-bed.x) < 2.2 and absf(flat.y-bed.y) < 1.7: return "dirt"
+	# The bench terrace and the archive's paved reading garden are flat slabs.
+	if absf(flat.x-5.4) < 1.55 and absf(flat.y-10.5) < 1.25: return "stone"
+	if flat.distance_to(Vector2(10,-.8)) < 2.5: return "stone"
+	if on_path(flat): return "cobble"
+	return "grass"
+
 func build_ground() -> void:
 	var soil = preload("res://scripts/hub_surfaces.gd").ground()
 	world.box(Vector3(0,-.24,0),Vector3(110,.48,100),soil,true)

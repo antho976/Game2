@@ -9,6 +9,8 @@ var cat_food_position := Vector3.ZERO
 var navigation := AStarGrid2D.new()
 var navigation_ready := false
 var rng := RandomNumberGenerator.new()
+var last_takeoff := -10.0
+var takeoffs := 0
 const CELL := .6
 const GRID_ORIGIN := Vector2(-18.6,-15)
 const FEEDING_PATCHES := [Vector3(3,0,7.5),Vector3(-7.7,0,6.4),Vector3(0,0,-5.2),Vector3(10.8,0,4.2),Vector3(-4,0,-3.5),Vector3(1.8,0,11.5)]
@@ -249,7 +251,14 @@ func begin_flight(a: Dictionary, player: Vector3) -> void:
 		a.timer = 1.0
 		return
 	a.target = destination
-	kit.world.game.play_sound("bird_flight",a.body.position)
+	# Three or more birds leaving inside half a second read as one startled flock.
+	var now := elapsed
+	if now-last_takeoff < .5:
+		takeoffs += 1
+		if takeoffs == 3: kit.world.game.audio.play("bird_flock_alarm",a.body.position,-10,{"cooldown":2.0})
+	else: takeoffs = 1
+	last_takeoff = now
+	kit.world.game.audio.play("bird_takeoff",a.body.position,-14,{"cooldown":.08})
 	a.state = "takeoff"
 	a.path.clear()
 	a.timer = 12.0
@@ -284,11 +293,14 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 				if a.interest == 0:
 					a.attention_cooldown = rng.randf_range(10,22)
 					wander_route(a)
+				elif a.state == "follow" and rng.randf() < delta*.25:
+					kit.world.game.audio.play("cat_chirrup",body.position,-18,{"cooldown":2.5})
 			elif distance < 6 and a.attention_cooldown <= 0:
-				kit.world.game.play_sound("cat_meow",body.position)
+				kit.world.game.play_sound("cat_meow",body.position,"",0,-14)
 				a.interest = rng.randf_range(3,6)
 				a.decision = 0.0
 		if not food and not a.friendly and (distance < 3.3 or (a.state == "flee" and distance < 5.5)):
+			if a.state != "flee": kit.world.game.audio.play("cat_hiss",body.position,-14,{"cooldown":4.0})
 			a.state = "flee"
 			a.timer = 1.8
 			if a.decision <= 0: escape_route(a,player)
@@ -366,7 +378,7 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 			if distance < 2.7 or a.flight_due <= 0:
 				begin_flight(a,player)
 			elif a.state == "feeding" and a.timer <= 0:
-				if rng.randf() < .12: kit.world.game.play_sound("bird_chirp",body.position)
+				if rng.randf() < .12: kit.world.game.play_sound("bird_chirp",body.position,"",0,-18)
 				var candidate: Vector3 = a.home+Vector3(rng.randf_range(-1.4,1.4),0,rng.randf_range(-1.4,1.4))
 				a.path = route(body.position,candidate)
 				if not a.path.is_empty():
@@ -401,6 +413,7 @@ func step_animal(a: Dictionary, player: Vector3, delta: float) -> void:
 				if body.position.distance_to(a.target) < .12:
 					a.home = a.target
 					a.landings += 1
+					kit.world.game.audio.play("bird_land",body.position,-18,{"cooldown":.1})
 					a.state = "feeding"
 					a.timer = rng.randf_range(1.2,3.2)
 					a.flight_due = rng.randf_range(12,28)
@@ -425,7 +438,10 @@ func pet(animal: Dictionary) -> void:
 	animal.pets += 1
 	animal.interest = 6.0
 	animal.attention_cooldown = 12.0
-	kit.world.game.play_sound("cat_purr",animal.body.position)
+	# The purr lasts as long as the hand does.
+	var key := "purr:"+str(animal.body.get_instance_id())
+	kit.world.game.audio.loop(key,"cat_purr",Vector3(0,.15,0),-16,{"bus":"SFX","max_distance":8,"fade_in":true,"parent":animal.body})
+	get_tree().create_timer(2.4).timeout.connect(func(): kit.world.game.audio.stop(key,.6))
 
 func offer_bird_food(spots: Array[Vector3]) -> void:
 	var birds: Array[Dictionary] = []

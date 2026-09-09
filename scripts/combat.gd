@@ -242,6 +242,9 @@ func start() -> void:
 		var held=hands.get_node_or_null("HeldGreatsword")
 		if held: hands_trail=add_trail(held)
 	show_banner("SALUTE",Color(.95,.88,.66))
+	audio.play("sword_draw",game.player.position+Vector3.UP*1.3,-10)
+	audio.play("sword_draw",enemy.position+Vector3.UP*1.3,-14,.94)
+	game.audio.loop("combat_music","music_combat_layer",null,-22,{"bus":"Music","fade_in":true,"fade":1.5})
 	say("Sparring begun. Read the raised guard before you strike.")
 func stop(reason: String) -> void:
 	if not active: return
@@ -260,6 +263,9 @@ func stop(reason: String) -> void:
 	game.refresh_equipment()
 	respawn=3.0
 	foe=RULES.state(profile.health,100)
+	audio.play("sword_sheathe",game.player.position+Vector3.UP*1.3,-12)
+	game.audio.stop("combat_music",2.0)
+	game.audio.stop("winded",.4)
 	say(reason)
 func say(text: String) -> void:
 	message=text
@@ -272,6 +278,7 @@ func show_banner(text: String,color := Color(1,.9,.7)) -> void:
 	# The word lands with a punch: oversized for a frame, then settling with a little overshoot.
 	banner.pivot_offset=banner.size*.5
 	banner.scale=Vector2.ONE*1.35
+	game.audio.ui("hud_banner",-16)
 	create_tween().tween_property(banner,"scale",Vector2.ONE,.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 func pulse(color: Color) -> void:
 	pulse_time=.35
@@ -287,6 +294,8 @@ func refuse() -> void:
 func slow_motion(scale: float,seconds: float) -> void:
 	if game.test_mode or DisplayServer.get_name()=="headless": return
 	Engine.time_scale=scale
+	game.audio.set_ducked(true)
+	get_tree().create_timer(seconds,true,false,true).timeout.connect(func(): game.audio.set_ducked(false))
 	slow_until=Time.get_ticks_msec()+int(seconds*1000)
 	get_tree().create_timer(seconds,true,false,true).timeout.connect(func():
 		if Time.get_ticks_msec()>=slow_until-5: Engine.time_scale=1.0)
@@ -312,6 +321,7 @@ func feint(fighter: Dictionary,direction: int,is_hero: bool) -> bool:
 	fighter.flash=.35
 	if is_hero: show_banner("FEINT",Color(.95,.85,.55))
 	else: show_banner("FEINT!",Color(1,.5,.35))
+	audio.play("feint",(game.player.position if is_hero else enemy.position)+Vector3.UP*1.3,-14)
 	return true
 func block(pressed: bool) -> void:
 	if not active: return
@@ -363,6 +373,8 @@ func attack(heavy: bool) -> bool:
 	hero.total=RULES.windup(heavy,float(weapon().speed),hero.pursuit,hero.riposte,winded(hero))
 	hero.timer=hero.total
 	hero.swoosh=true
+	# A short, ordinary effort grunt as the swing starts; heavier cuts breathe a little deeper.
+	audio.play("hero_effort",game.player.position+Vector3.UP*1.5,-16 if heavy else -19,.94 if heavy else 1.0)
 	if is_instance_valid(hero_trail): hero_trail.active=false
 	return true
 func quickstep() -> bool:
@@ -685,6 +697,11 @@ func resolve_hit(from_hero: bool) -> String:
 	audio.play("slam" if attacker.heavy else "thud",contact,-4 if attacker.heavy else -8)
 	audio.play("flesh",contact,-8 if stagger else -12)
 	audio.play("clang",contact,-20,.8)
+	audio.play("blood_spatter",contact-Vector3.UP*.9,-16 if stagger else -20)
+	if attacker.critical or finishing: audio.play("finishing_blow" if finishing else "critical_hit",contact,-4)
+	var victim: Vector3=(enemy.position if from_hero else game.player.position)+Vector3.UP*1.5
+	if from_hero: audio.play("foe_hurt_heavy" if stagger else "foe_hurt_light",victim,-10 if stagger else -14)
+	else: audio.play("hero_hurt_heavy" if stagger else "hero_hurt_light",victim,-10 if stagger else -14)
 	hitstop=.20 if (attacker.critical or finishing) else (.14 if attacker.heavy else .07)
 	shake=1.0 if stagger else .5
 	var label := "Critical! " if from_hero and attacker.critical else ("Finishing blow! " if finishing else ("Guard forced! " if pierced else ""))
@@ -707,12 +724,15 @@ func finish(hero_won: bool) -> void:
 		shake=1.0
 		white_flash=.3
 		slow_motion(.3,.9)
+		game.audio.play_2d("victory_stinger",-8,{"bus":"Music"})
+		audio.play("foe_kneel",enemy.position,-12)
 		stop(reward if error.is_empty() else error)
 		fallen=respawn
 	else:
 		show_banner("DEFEATED",Color(1,.5,.4))
 		hurt_flash=1.4
 		slow_motion(.45,.8)
+		game.audio.play_2d("defeat_stinger",-8,{"bus":"Music"})
 		stop("Defeated. Rest, then press F to try again. No items lost.")
 func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe_swings+=1
@@ -730,6 +750,7 @@ func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe.cued=false
 	foe.stamina=maxf(0,foe.stamina-15)
 	foe.regen_delay=.8
+	audio.play("foe_effort",enemy.position+Vector3.UP*1.5,-16 if heavy else -19,.92 if heavy else 1.0)
 func _physics_process(delta: float) -> void:
 	respawn=maxf(0,respawn-delta)
 	message_time=maxf(0,message_time-delta)
@@ -772,6 +793,8 @@ func _physics_process(delta: float) -> void:
 	if salute<=0: fight_time+=delta
 	parry_lock=maxf(0,parry_lock-delta)
 	dodge_time=maxf(0,dodge_time-delta)
+	if winded(hero): game.audio.loop("winded","winded_breath",null,-20,{"bus":"SFX","fade_in":true})
+	else: game.audio.stop("winded",.8)
 	dodge_recent=maxf(0,dodge_recent-delta)
 	swipe_idle=maxf(0,swipe_idle-delta)
 	if swipe_idle<=0 and not hero.blocking: swipe=Vector2.ZERO
@@ -1342,6 +1365,7 @@ func _process(delta: float) -> void:
 	meters.text="Level %d   XP %d/%d   Skill points %d%s"%[game.equipment.level,game.equipment.xp,RULES.xp_needed(game.equipment.level),game.equipment.skill_points,form_text]
 func open_skills() -> void:
 	if active: return
+	game.audio.ui("ui_panel_open")
 	game.input_blocked=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	skill_panel.show()
@@ -1406,6 +1430,7 @@ func refresh_skills() -> void:
 			button.pressed.connect(func():
 				var error: String=game.equipment.learn_combat(id)
 				if not error.is_empty(): game.toast(error)
+				game.audio.ui("ui_denied" if not error.is_empty() else "skill_learn",-10)
 				refresh_skills())
 			content.add_child(button)
 	# Sword forms are known from the start; the cards are a reference, not a purchase.
@@ -1446,6 +1471,7 @@ func refresh_skills() -> void:
 	close.pressed.connect(close_skills)
 	column.add_child(close)
 func close_skills() -> void:
+	if skill_panel.visible: game.audio.ui("ui_panel_close")
 	skill_panel.hide()
 	game.input_blocked=false
 	game.sync_camera_mouse()

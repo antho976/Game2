@@ -15,6 +15,12 @@ var previous_yaw := 0.0
 const WALK_GROUND_SPEED := 1.625
 const RUN_GROUND_SPEED := 4.59
 const RUN_THRESHOLD := 3.3
+# Footsteps fire by distance travelled, half a cycle apart, so they stay under the feet at
+# any playback speed: the walk clip covers 1.3 m per cycle and the run 3.06 m.
+const WALK_STRIDE := .65
+const RUN_STRIDE := 1.53
+var stride := 0.0
+var surface := "grass"
 
 func _ready() -> void:
 	name = "UnarmedPlayer"
@@ -68,6 +74,7 @@ func _physics_process(delta: float) -> void:
 			activity = ""
 			position = seat_exit
 			collision_mask = 5
+			game.audio.play("bench_stand",position,-14)
 		else: input = Vector2.ZERO
 	var direction := Vector3(input.x,0,input.y).rotated(Vector3.UP,game.yaw)
 	var speed := 5.6 if Input.is_action_pressed("run") else 2.0
@@ -109,12 +116,36 @@ func _physics_process(delta: float) -> void:
 	model.rotation.x = lean
 	model.rotation.z = bank
 	if is_on_floor(): last_safe = position
-	if position.y < -3: position = last_safe+Vector3.UP
+	if position.y < -3:
+		position = last_safe+Vector3.UP
+		game.audio.play("player_land",position,-12)
+	footsteps(planar,delta)
+
+func footsteps(planar: float,delta: float) -> void:
+	if planar < .3 or not is_on_floor() or activity == "sit":
+		stride = minf(stride,.2)
+		return
+	var running := planar > RUN_THRESHOLD
+	stride += planar*delta
+	if stride < (RUN_STRIDE if running else WALK_STRIDE): return
+	stride = 0.0
+	surface = game.kit.surface_at(position)
+	var id := "step_"+surface+("_run" if running else "_walk")
+	if running and not game.audio.has(id): id = "step_"+surface+"_walk"
+	if not game.audio.has(id): id = "step_grass_run" if running else "step_grass_walk"
+	game.audio.play(id,position,-12 if running else -17,{"max_distance":16,"pitch_spread":.07})
+	game.audio.play("foley_cloth_walk",position,-24,{"max_distance":8})
+	if not is_instance_valid(game.equipment): return
+	if game.equipment.equipped.keys().any(func(slot): return slot != "weapon"):
+		game.audio.play("foley_plate_walk",position,-22,{"max_distance":10})
+	elif game.equipment.equipped.has("weapon"):
+		game.audio.play("foley_sword_back",position,-24,{"max_distance":8})
 
 func act(id: String, target: Vector3, seconds: float) -> void:
 	if id == "sit":
 		seat_exit = position
 		collision_mask = 0
+		game.audio.play("bench_sit",position,-14)
 	activity = id
 	activity_time = seconds
 	var direction := target-position

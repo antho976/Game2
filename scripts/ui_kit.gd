@@ -65,12 +65,25 @@ static func label(parent: Node,text: String,size := 16,color := PARCH) -> Label:
 	node.add_theme_color_override("font_color",color)
 	parent.add_child(node)
 	return node
+## Every button in the game clicks and ticks through here, so the screens share one voice.
+static var audio_kit: Node
+static func sound(node: BaseButton,kind := "click") -> void:
+	if not node.is_inside_tree():
+		node.tree_entered.connect(func(): sound(node,kind),CONNECT_ONE_SHOT)
+		return
+	if not is_instance_valid(audio_kit): audio_kit = node.get_tree().root.find_child("AudioKit",true,false)
+	var audio := audio_kit
+	if audio == null: return
+	node.pressed.connect(func(): audio.ui("ui_back" if kind=="back" else ("ui_confirm" if kind=="confirm" else "ui_click")))
+	node.mouse_entered.connect(func(): if not node.disabled: audio.ui("ui_hover",-22))
+	node.focus_entered.connect(func(): audio.ui("ui_hover",-22))
 static func button(parent: Node,title: String,callback: Callable,disabled := false,kind := "secondary") -> Button:
 	var node := Button.new()
 	node.text = title
 	node.custom_minimum_size.y = 46 if kind!="ghost" else 40
 	node.disabled = disabled
 	node.pressed.connect(callback)
+	sound(node,"confirm" if kind=="primary" or kind=="danger" else "click")
 	node.add_theme_font_size_override("font_size",17 if kind=="primary" or kind=="danger" else 15)
 	skin(node,kind)
 	parent.add_child(node)

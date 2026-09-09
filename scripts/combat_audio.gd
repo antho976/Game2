@@ -49,6 +49,10 @@ func render(seconds: float,shape: Callable) -> AudioStreamWAV:
 	wav.data=data
 	return wav
 func play(id: String,pos: Vector3,volume := -12.0,pitch := 1.0) -> void:
+	# A recording in assets/audio wins; the synthesised version only fills a gap.
+	if game.audio != null and game.audio.has(id):
+		game.audio.play(id,pos,volume,{"pitch":pitch,"pitch_spread":.06,"max_distance":24,"unit_size":5})
+		return
 	if not streams.has(id) or game.muted or game.test_mode: return
 	var player := AudioStreamPlayer3D.new()
 	player.stream=streams[id]

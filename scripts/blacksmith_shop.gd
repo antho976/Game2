@@ -110,6 +110,7 @@ func _ready() -> void:
 		button.custom_minimum_size.y = 36
 		button.add_theme_font_size_override("font_size",14)
 		button.pressed.connect(func(): filter_slot=slot; refresh())
+		UiKit.sound(button)
 		if slot!="all":
 			var icon := GearIcon.new()
 			icon.slot = slot
@@ -202,6 +203,8 @@ func _ready() -> void:
 	confirm.confirmed.connect(attempt_upgrade)
 	UiKit.skin(confirm.get_ok_button(),"danger")
 	UiKit.skin(confirm.get_cancel_button(),"secondary")
+	UiKit.sound(confirm.get_ok_button(),"confirm")
+	UiKit.sound(confirm.get_cancel_button(),"back")
 	for dialog_button in [confirm.get_ok_button(),confirm.get_cancel_button()]: dialog_button.focus_mode = Control.FOCUS_ALL
 	root.add_child(confirm)
 	game.research.changed.connect(func():
@@ -285,6 +288,8 @@ func clear(parent: Node) -> void:
 		child.queue_free()
 func open() -> void:
 	active = true
+	game.audio.ui("shop_open",-10)
+	game.audio.set_loop_volume("forge",-13)
 	preview.process_mode = Node.PROCESS_MODE_INHERIT
 	game.input_blocked = true
 	game.ui.hide()
@@ -293,6 +298,8 @@ func open() -> void:
 	refresh()
 func close() -> void:
 	active = false
+	game.audio.ui("shop_close",-12)
+	game.audio.set_loop_volume("forge",-18)
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 	confirm.hide()
 	root.hide()
@@ -305,6 +312,7 @@ func _input(event: InputEvent) -> void:
 		else: close()
 		get_viewport().set_input_as_handled()
 func message(text: String,tone := GOLD) -> void:
+	if tone == BAD: game.audio.ui("ui_denied")
 	status.text = text
 	status.add_theme_color_override("font_color",PARCH if tone==GOLD else tone)
 	status_dot.add_theme_stylebox_override("panel",UiKit.flat(tone,Color(0,0,0,0),0,5,Vector2.ZERO))
@@ -510,6 +518,7 @@ func refresh() -> void:
 		var def: Dictionary = entry if page=="stock" else GearCatalog.find(entry.id)
 		var card := card_in(def,entry,entry==selected)
 		card.pressed.connect(func(): selected_id=def.id; selected_uid=0 if page=="stock" else entry.uid; preview.rotation.y=2.8 if def.slot=="weapon" else -.35; refresh())
+		UiKit.sound(card)
 		rows.add_child(card)
 	if visible_entries.is_empty():
 		UiKit.spacer(detail,30)
@@ -550,6 +559,7 @@ func refresh() -> void:
 		var reason: String = game.equipment.buy_error(selected_id)
 		UiKit.button(detail,"Buy  ·  %d gold"%game.equipment.purchase_price(def.id),func():
 			var error: String = game.equipment.buy(selected_id)
+			if error.is_empty(): game.audio.ui("shop_buy",-8)
 			message(error if not error.is_empty() else "Purchased "+def.name+". It hangs under Your equipment.",BAD if not error.is_empty() else GOOD)
 		,not reason.is_empty(),"primary")
 		if not reason.is_empty():
@@ -567,6 +577,7 @@ func refresh() -> void:
 		var worn: bool = game.equipment.equipped.get(def.slot,0)==selected_uid
 		UiKit.button(detail,"Unequip" if worn else "Equip",func():
 			var error: String = game.equipment.unequip(def.slot) if worn else game.equipment.equip(selected_uid)
+			if error.is_empty(): game.audio.ui("unequip" if worn else ("equip_weapon" if def.slot=="weapon" else "equip_armor"),-10)
 			message(error if not error.is_empty() else ("Unequipped " if worn else "Equipped ")+def.name,BAD if not error.is_empty() else GOOD)
 		,false,"secondary" if worn else "primary")
 		UiKit.button(detail,"Take to the anvil",func(): page="upgrade"; refresh())
@@ -631,6 +642,15 @@ func request_upgrade() -> void:
 	confirm.popup_centered(Vector2i(500,270))
 func attempt_upgrade() -> void:
 	var result: Dictionary = game.equipment.upgrade(pending_uid,pending_rank,pending_quote)
-	if not result.error.is_empty(): message(result.error,BAD)
-	elif result.survived: message("The temper held. The piece is stronger.",GOOD)
+	if not result.error.is_empty():
+		message(result.error,BAD)
+		return
+	# Three strikes and a quench, then the verdict lands on the hiss.
+	game.audio.ui("upgrade_attempt",-8)
+	var verdict := func():
+		if not active: return
+		game.audio.ui("upgrade_success" if result.survived else "upgrade_fail",-8)
+	if game.test_mode or DisplayServer.get_name() == "headless": verdict.call()
+	else: get_tree().create_timer(1.6).timeout.connect(verdict)
+	if result.survived: message("The temper held. The piece is stronger.",GOOD)
 	else: message("The forge ruined it. That copy is gone for good.",BAD)

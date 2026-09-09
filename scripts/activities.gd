@@ -15,6 +15,7 @@ var can: Node3D
 var garden_mat: StandardMaterial3D
 var rng := RandomNumberGenerator.new()
 var water_emitter: GPUParticles3D
+var quack_due := 4.0
 
 func asset(id: String,pos: Vector3) -> Node3D:
 	var node: Node3D = load("res://assets/village/"+id+".glb").instantiate()
@@ -151,10 +152,21 @@ func _physics_process(delta: float) -> void:
 		duck.art.rotation.z = sin(elapsed*2+duck.phase)*.025
 		var dip: float = .9+.42*(.5+.5*sin(elapsed*7+duck.phase)) if feeding else 0.0
 		duck.head.rotation.x = lerpf(duck.head.rotation.x,dip,minf(delta*8,1))
+		if duck.mode == "avoid" and not duck.get("alarmed",false):
+			game.audio.play("duck_avoid",duck.model.position,-16,{"cooldown":1.5})
+		duck.alarmed = duck.mode == "avoid"
+		if feeding and rng.randf() < delta*.5: game.audio.play("duck_dabble",duck.model.position,-20,{"cooldown":.6})
 		duck.fed = feeding
 		duck.wake.position = Vector3(duck.model.position.x,.102,duck.model.position.z)
 		var size := .85+sin(elapsed*1.4+duck.phase)*.12
 		duck.wake.scale = Vector3(size,.08,size*.75)
+	# A quack now and then from whichever duck is furthest from the last one.
+	quack_due -= delta
+	if quack_due <= 0:
+		quack_due = rng.randf_range(5,14)
+		var duck: Dictionary = ducks[rng.randi_range(0,ducks.size()-1)]
+		var size: float = duck.art.scale.x
+		game.audio.play("duck_quack",duck.model.position,-16,{"pitch":1.15-size*.35,"pitch_spread":.04})
 	if bell_time > 0:
 		bell_time -= delta
 		# Gentle swing of the authored cup; posts stay planted.
@@ -174,6 +186,8 @@ func interact(id: String) -> void:
 	match id:
 		"dummy":
 			game.kit.practice_dummy.strike()
+			game.audio.play("dummy_hit",game.kit.practice_dummy.position+Vector3.UP,-8)
+			game.audio.play("dummy_swing",game.kit.practice_dummy.position+Vector3.UP,-20,{"cooldown":1.0})
 			game.toast("Ready for greatsword practice, once you have a blade.")
 		"feed":
 			if elapsed < feed_until:
@@ -182,6 +196,7 @@ func interact(id: String) -> void:
 			feed_until = elapsed+16
 			fed_count += 1
 			game.player.act("feed",POND,1.3)
+			game.audio.play("feed_grab",game.player.position+Vector3.UP,-16)
 			throw_feed(game.player, POND+Vector3(1.7,.12,0))
 			game.toast("The ducks paddle over for a closer look.")
 			for i in 8:
@@ -197,6 +212,7 @@ func interact(id: String) -> void:
 			water_until = elapsed+3
 			game.player.act("water",Vector3(10,0,8.3),3)
 			game.toast("A little care for tomorrow's supper.")
+			game.audio.play("water_can_lift",can.position+Vector3.UP*.3,-14)
 			water_particles()
 		"pond_sit":
 			game.player.act("sit",Vector3(-12.0,0,8.7),0)
@@ -208,6 +224,7 @@ func interact(id: String) -> void:
 			game.toast("Stay a while. Move when you are ready.")
 		"bell":
 			bell_time = 3.0
+			game.audio.play("bell_rope",bell.position+Vector3.UP,-16)
 			game.toast("The sound carries across the square.")
 			for animal in game.kit.life.animals:
 				if animal.kind == "bird": game.kit.life.begin_flight(animal,game.player.position)
@@ -236,10 +253,18 @@ func water_particles() -> void:
 	mesh.material = game.flat_material(Color(.48,.69,.74))
 	particles.draw_pass_1 = mesh
 	add_child(particles)
+	var key := "pour:"+str(particles.get_instance_id())
+	game.audio.loop(key,"water_pour",Vector3(9.45,.6,8.25),-16,{"bus":"SFX","max_distance":10,"fade_in":true,"fade":.25})
+	get_tree().create_timer(3.0).timeout.connect(func():
+		game.audio.stop(key,.5)
+		game.audio.play("water_can_set",Vector3(8.4,.3,8.3),-18,{"cooldown":.5}))
 	get_tree().create_timer(3.6).timeout.connect(particles.queue_free)
 
 func bell_sound() -> void:
 	if game.muted or game.test_mode: return
+	if game.audio.has("bell_ring"):
+		game.audio.play("bell_ring",bell.position+Vector3.UP*1.7,-6,{"max_distance":45,"unit_size":6,"pitch_spread":.01})
+		return
 	var data := PackedByteArray()
 	data.resize(44100*3*2)
 	for i in 44100*3:
@@ -274,6 +299,7 @@ func throw_feed(person: Node3D,target: Vector3) -> void:
 		var skeleton: Skeleton3D = skeletons[0]
 		start = skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("Hand.R")).origin
 	feed_releases += 1
+	game.audio.play("feed_throw",start,-16)
 	var spots: Array[Vector3] = []
 	var for_ducks := Vector2(target.x-POND.x,target.z-POND.z).length()<3.7
 	var mesh := SphereMesh.new()
@@ -299,7 +325,9 @@ func throw_feed(person: Node3D,target: Vector3) -> void:
 		tween.tween_callback(seed.queue_free)
 
 	await get_tree().create_timer(.85).timeout
+	game.audio.play("feed_land_water" if for_ducks else "feed_land_ground",target,-16)
 	if for_ducks:
+		if elapsed >= feed_until-.5: game.audio.play("duck_gather",POND+Vector3(1.7,.1,0),-12,{"cooldown":6.0})
 		duck_food.assign(spots.slice(0,4))
 		feed_until = elapsed+18
 	elif target.distance_to(game.village_day.stations.birds+Vector3(0,.06,1.2))<1:
@@ -328,11 +356,16 @@ func draw_water(person: Node3D, carried: Node3D) -> void:
 		bucket.position.y = y
 		rope.position = Vector3(.25,(2.35+y)*.5,.3)
 		rope.scale.y = 2.35-y
+	var well := Vector3(0,1.2,.3)
+	game.audio.play("well_crank",well,-16)
 	tween.tween_method(lower,1.2,.42,1.8)
+	tween.tween_callback(func(): game.audio.play("well_splash",Vector3(0,-1.5,.3),-12,{"unit_size":6}))
 	tween.tween_interval(.6)
+	tween.tween_callback(func(): game.audio.play("well_haul",well,-16))
 	tween.tween_method(lower,.42,1.35,2.4)
 	tween.tween_callback(func():
 		if is_instance_valid(person) and is_instance_valid(carried): carried.show()
+		game.audio.play("well_bucket_set",well,-16)
 		bucket.queue_free()
 		rope.queue_free()
 	)

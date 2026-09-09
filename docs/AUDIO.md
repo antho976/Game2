@@ -417,7 +417,19 @@ Every button in the game goes through `menu.gd` `button`, `UiKit.button`, the sh
 
 The title screen orbits the live village, so it should keep the hub theme and the daytime ambience rather than its own track.
 
-## 11. Technical plan
+## 11. Implementation
+
+The system described in the plan below is now in place; this section records what exists.
+
+- **`scripts/audio_kit.gd`** creates the Music, Ambience, SFX, UI and Dialogue buses, scans `assets/audio` for `<id>_NN.wav|ogg|mp3` and exposes `play(id, pos)`, `play_2d`, `ui`, `loop(key, id, pos)`, `stop(key)`, `bed(id, volume, weight)` and `set_ducked`. Variations never repeat the last take, pitch wobbles a few percent, per-id cooldowns stop machine-gun triggers, and a 40-voice cap protects the mixer. Ambience and SFX drop behind a 900 Hz low-pass with the music 4 dB down whenever a menu, the shop, the archive, the lesson or the skill panel blocks input, and during combat slow motion.
+- **`assets/audio/manifest.json`** holds one ElevenLabs sound-effects prompt per id with duration, variation count and target peak. **`tools/generate_sounds.py`** requests the missing files, trims silence, peak-normalises and writes WAV one-shots and OGG loops. Priority 1 runs by default; `--priority 2` or `--all` widens it; naming an id regenerates just that sound. Set `ELEVENLABS_API_KEY` first.
+- **Footsteps** fire by distance in `player.gd` (0.65 m walking, 1.53 m running) on the surface `HubKit.surface_at` reports: wood inside the school, dirt on the pond shore and around the vegetable beds, stone on the bench terrace and the archive garden, cobble wherever `on_path` is true, grass elsewhere. Cloth foley rides under every step; plate or the slung greatsword add their own layer when equipped. Residents use the same sets at -24 dB.
+- **Day and night** crossfade five beds on the daylight value in `village_day.gd` (`amb_hub_air`, `amb_day_birds`, `amb_dawn`, `amb_dusk`, `amb_night`), fire lamp ignitions once as the light crosses half, an owl at night, a cockerel between 05:36 and 06:36 from a hamlet direction, and wind gusts from a random tree. Inside the school the beds fall to 30% under the room tone.
+- **Combat** keeps `combat_audio.gd` as the router: a recorded file under the same id replaces the synthesised version automatically. The player's swing now carries a short ordinary effort grunt (`hero_effort`), not a shout; the partner answers with his own. Hits add hurt voices, blood, and critical or finishing layers; the bout draws and sheathes the sword, fades a percussion layer in and out on the Music bus, breathes while winded, and lands victory and defeat stingers.
+- **Interface** goes through `UiKit.sound`, which every `UiKit.button`, menu button, shop card, study node and confirmation dialog calls: hover tick, click, back, confirm and denied. Shop, archive, upgrades, research, level-ups, the skill panel and toasts have their own cues. Options gained a slider per bus, persisted as `volume_<bus>`.
+- The synthesised bell, syllables and combat sounds remain as fallbacks so the game never goes silent while a file is missing.
+
+## 12. Technical plan (as written before implementation)
 
 1. **Buses.** Create Music, Ambience, SFX, UI and Dialogue in `main.gd` `_ready` (the Dialogue bus creation in `dialogue_sounds.gd` can move there). Options page gets six sliders; `store_option` already persists values.
 2. **`play_sound` upgrade.** Accept a variation count, pick `_NN` at random avoiding the last one played per ID, apply ±4% pitch, honour `_channel` as the bus and `_cooldown` per ID. Add a `volume` argument; today every one-shot is -16 dB.
@@ -429,7 +441,7 @@ The title screen orbits the live village, so it should keep the hub theme and th
 8. **Format.** Loops as OGG Vorbis 44.1 kHz stereo (beds) or mono (spatial). One-shots as 16-bit WAV mono, trimmed to the transient, peak -3 dBFS, no baked reverb. Name `category_name_NN.wav`, starting at `_01` so the existing loader keeps working.
 9. **Mix targets.** Beds -23 dB, spatial loops -17 to -19 dB, footsteps -18 dB, activities -14 dB, combat impacts -4 to -10 dB as already tuned, UI -12 dB, dialogue -20 dB. Music sits under everything at -25 dB and ducks a further 4 dB in menus and 3 dB while combat impacts play.
 
-## 12. Counts and order of work
+## 13. Counts and order of work
 
 | Category | Distinct sounds | Files with variations |
 | --- | --- | --- |

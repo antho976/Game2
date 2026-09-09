@@ -14,6 +14,8 @@ var window_size := Vector2i(1440,900)
 var window_position := Vector2i.ZERO
 var display_choice: OptionButton
 var confirm: ConfirmationDialog
+const BUS_TITLES := {"Music":"Music","Ambience":"Ambience  ·  wind, water, birds","SFX":"Effects  ·  steps, work, combat","UI":"Interface","Dialogue":"Voices"}
+const BUS_DEFAULTS := {"Music":.8,"Ambience":1.0,"SFX":1.0,"UI":.85,"Dialogue":1.0}
 var panel: PanelContainer
 var fps_label: Label
 var fps_clock := 0.0
@@ -91,6 +93,8 @@ func build() -> void:
 	confirm.dialog_text = "This replaces your saved hub visit."
 	confirm.confirmed.connect(new_game)
 	root.add_child(confirm)
+	UiKit.sound(confirm.get_ok_button(),"confirm")
+	UiKit.sound(confirm.get_cancel_button(),"back")
 
 func clear(title: String, subtitle: String) -> void:
 	panel.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
@@ -124,6 +128,7 @@ func button(value: String, callback: Callable, disabled := false) -> Button:
 	node.disabled = disabled
 	node.pressed.connect(callback)
 	box.add_child(node)
+	UiKit.sound(node,"back" if value in ["Back","Resume"] else "click")
 	return node
 
 func open() -> void:
@@ -157,6 +162,7 @@ func show_home() -> void:
 
 func show_pause() -> void:
 	home = false
+	game.audio.ui("ui_panel_open")
 	open()
 	clear("Take a breath", "Your place in the village is saved automatically.")
 	button("Resume",resume).grab_focus()
@@ -167,6 +173,7 @@ func show_pause() -> void:
 func resume() -> void:
 	home = false
 	active = false
+	game.audio.ui("ui_panel_close")
 	started = true
 	root.hide()
 	game.ui.show()
@@ -291,6 +298,11 @@ func save_game() -> Error:
 
 func quit_game() -> void:
 	save_game()
+	# Let the last sound settle instead of cutting the mix off mid-sample.
+	if not game.test_mode and DisplayServer.get_name() != "headless":
+		var tween := create_tween()
+		tween.tween_method(func(v: float): AudioServer.set_bus_volume_db(0,linear_to_db(maxf(v,.0001))),float(settings.get_value("options","volume",.8)),0.0,.35)
+		await tween.finished
 	get_tree().quit()
 
 func _notification(what: int) -> void:
@@ -351,6 +363,8 @@ func set_fullscreen(enabled: bool) -> void:
 func apply_settings() -> void:
 	apply_camera_settings()
 	AudioServer.set_bus_volume_db(0,linear_to_db(float(settings.get_value("options","volume",.8))))
+	for bus in AudioKit.BUSES:
+		game.audio.set_volume(bus,float(settings.get_value("options","volume_"+bus.to_lower(),BUS_DEFAULTS.get(bus,1.0))))
 	Engine.max_fps = int(settings.get_value("options","fps",60))
 	get_viewport().scaling_3d_scale = float(settings.get_value("options","scale",.85))
 	if DisplayServer.get_name() != "headless":
@@ -403,8 +417,17 @@ func show_options() -> void:
 	volume.max_value = 1
 	volume.step = .01
 	volume.value = float(settings.get_value("options","volume",.8))
-	volume.value_changed.connect(func(value): game.muted = false; AudioServer.set_bus_mute(0,false); AudioServer.set_bus_volume_db(0,linear_to_db(value)); store_option("volume",value))
+	volume.value_changed.connect(func(value): game.muted = false; AudioServer.set_bus_mute(0,false); AudioServer.set_bus_volume_db(0,linear_to_db(maxf(value,.0001))); store_option("volume",value); game.audio.ui("ui_slider",-18))
 	box.add_child(volume)
+	for bus in AudioKit.BUSES:
+		text(BUS_TITLES[bus],15)
+		var slider := HSlider.new()
+		slider.min_value = 0
+		slider.max_value = 1
+		slider.step = .01
+		slider.value = float(settings.get_value("options","volume_"+bus.to_lower(),BUS_DEFAULTS.get(bus,1.0)))
+		slider.value_changed.connect(func(value): game.audio.set_volume(bus,value); store_option("volume_"+bus.to_lower(),value); game.audio.ui("ui_slider",-18))
+		box.add_child(slider)
 	button("Back",func():
 		if home: show_home()
 		else: show_pause()
