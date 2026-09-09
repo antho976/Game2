@@ -27,7 +27,7 @@ var overview := false
 var input_blocked := false
 var test_mode := false
 var paused := false
-var ambient: Array[AudioStreamPlayer] = []
+var audio: AudioKit
 var nearest := ""
 var nearest_pos := Vector3.ZERO
 var muted := false
@@ -71,6 +71,9 @@ func _ready() -> void:
 			var e := InputEventKey.new()
 			e.physical_keycode = code
 			InputMap.action_add_event(spec[0],e)
+	audio = AudioKit.new()
+	audio.game = self
+	add_child(audio)
 	world = HubWorld.new()
 	world.game = self
 	add_child(world)
@@ -139,10 +142,11 @@ func _ready() -> void:
 	combat.game=self
 	add_child(combat)
 	if not test_mode and not "--capture" in OS.get_cmdline_user_args(): menus.show_home()
-	play_ambient("amb_hub_air_01",-23)
-	play_ambient("music_hub_01",-25)
-	spatial_loop("amb_pond_01",Vector3(-12,.5,8.7),-17,12)
-	spatial_loop("amb_forge_01",Vector3(-9,1,0),-18,9)
+	audio.loop("music","music_hub",null,-25,{"bus":"Music"})
+	audio.loop("pond","amb_pond",Vector3(-12,.5,8.7),-17,{"max_distance":12})
+	audio.loop("forge","amb_forge",Vector3(-9,1,0),-18,{"max_distance":9})
+	audio.loop("spring","amb_spring",Vector3(-15.15,.35,8.4),-20,{"max_distance":6})
+	audio.loop("washing","amb_washing_line",Vector3(-9.05,1.6,-5.5),-24,{"max_distance":5})
 	if "--capture" in OS.get_cmdline_user_args(): capture()
 	if "--runtime-probe" in OS.get_cmdline_user_args():
 		var probe := preload("res://tests/runtime_probe.gd").new()
@@ -216,43 +220,8 @@ func flat_material(color: Color) -> StandardMaterial3D:
 	mat.emission = color
 	return mat
 
-func play_sound(id: String,pos: Vector3,_channel := "",_cooldown := 0.0) -> void:
-	if DisplayServer.get_name() == "headless": return
-	var path := "res://assets/audio/"+id+"_01.ogg"
-	if not ResourceLoader.exists(path) or muted or test_mode: return
-	var sound := AudioStreamPlayer3D.new()
-	sound.stream = load(path)
-	sound.position = pos
-	sound.volume_db = -16
-	sound.max_distance = 18
-	sound.unit_size = 4
-	add_child(sound)
-	sound.finished.connect(sound.queue_free)
-	sound.play()
-
-func play_ambient(id: String,volume: float) -> void:
-	if DisplayServer.get_name() == "headless": return
-	var sound := AudioStreamPlayer.new()
-	var stream: AudioStreamOggVorbis = load("res://assets/audio/"+id+".ogg")
-	stream.loop = true
-	sound.stream = stream
-	sound.volume_db = volume
-	add_child(sound)
-	ambient.append(sound)
-	sound.play()
-
-func spatial_loop(id: String,pos: Vector3,volume: float,radius: float) -> void:
-	if DisplayServer.get_name() == "headless": return
-	var sound := AudioStreamPlayer3D.new()
-	var stream: AudioStreamOggVorbis = load("res://assets/audio/"+id+".ogg")
-	stream.loop = true
-	sound.stream = stream
-	sound.position = pos
-	sound.volume_db = volume
-	sound.unit_size = 4
-	sound.max_distance = radius
-	world.add_child(sound)
-	sound.play()
+func play_sound(id: String,pos: Vector3,_channel := "",cooldown := 0.0,volume := -16.0) -> void:
+	audio.play(id,pos,volume,{"cooldown":cooldown,"max_distance":18})
 
 func label(text: String,size: int,color: Color,pos: Vector2) -> Label:
 	var node := Label.new()
@@ -288,6 +257,12 @@ func _process(delta: float) -> void:
 		was_in_school = inside_school()
 		blend_doorway_view()
 		sync_camera_mouse()
+		# The doorway: outdoor air gives way to the room, or the room opens onto the yard.
+		audio.play("door_open",player.position,-14,{"cooldown":.5})
+		if was_in_school: audio.loop("school","amb_school_room",null,-22,{"fade_in":true})
+		else: audio.stop("school",.6)
+	# Menus, the shop, the archive and the lesson pull the village behind a low-pass.
+	audio.set_ducked((input_blocked and not (is_instance_valid(menus) and menus.home)) or (is_instance_valid(combat) and combat.skill_panel.visible))
 	update_camera(delta)
 	notice_time = maxf(0,notice_time-delta)
 	notice.modulate.a = minf(notice_time,1)
@@ -414,6 +389,7 @@ func interact() -> void:
 				if animal.friendly:
 					kit.life.pet(animal)
 					player.act("pet",animal.body.position,2.1)
+					audio.play("pet_cat_hand",animal.body.position,-16)
 					toast("A little trust, freely given.")
 				return
 	elif not nearest.is_empty():
@@ -422,6 +398,7 @@ func interact() -> void:
 func toast(text: String) -> void:
 	notice.text = text
 	notice_time = 3.5
+	if not (is_instance_valid(combat) and combat.active): audio.ui("ui_toast",-20)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if input_blocked: return
@@ -443,6 +420,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_M:
 				muted = not muted
 				AudioServer.set_bus_mute(0,muted)
+				if not muted: audio.ui("ui_click")
 			KEY_F6:
 				if not combat.active:
 					player.position=combat.CENTER+Vector3(0,.1,2)

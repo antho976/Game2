@@ -19,6 +19,12 @@ func run(game: Node) -> void:
 			if clip.ends_with("_"+action): found = true
 		check(found,"Authored skeletal animation: "+action)
 	check(game.kit.life.navigation_ready,"Animal navigation built from live collision")
+	check(game.audio.library.size()>=70,"Sound library scanned %d sound ids from assets/audio"%game.audio.library.size())
+	for id in ["step_grass_walk","step_dirt_walk","step_cobble_walk","step_wood_walk","hero_effort","duck_quack","bell_ring","ui_click"]:
+		check(game.audio.has(id),"Sound present: "+id)
+	for bus in AudioKit.BUSES:
+		check(AudioServer.get_bus_index(bus)>=0,"Audio bus exists: "+bus)
+	check(game.kit.surface_at(Vector3(0,0,8.5))=="cobble" and game.kit.surface_at(Vector3(-15.5,0,8.7))=="dirt" and game.kit.surface_at(Vector3(-16,0,-12))=="grass","Footstep surfaces resolve to cobble, dirt and grass")
 	var start: Vector3 = game.player.position
 	game.player.position = Vector3(-13.7,.1,6.0)
 	Input.action_press("up")

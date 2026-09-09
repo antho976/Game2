@@ -141,7 +141,9 @@ func award_combat(amount: int,reward_gold: int) -> String:
 		level+=1
 		skill_points+=1
 	var error := commit(before)
-	if error.is_empty() and level>old_level: game.toast("Level %d. +%d skill point(s). Press K to learn combat skills."%[level,level-old_level])
+	if error.is_empty() and level>old_level:
+		game.toast("Level %d. +%d skill point(s). Press K to learn combat skills."%[level,level-old_level])
+		game.audio.play_2d("level_up",-8,{"bus":"Music"})
 	return error
 func learn_combat(id: String) -> String:
 	for skill in CombatRules.skills():

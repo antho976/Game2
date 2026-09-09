@@ -80,6 +80,7 @@ func set_text(text: String) -> void:
 	dialogue.visible_characters=0
 	reveal=0
 func ask() -> void:
+	game.audio.ui("ui_panel_open",-16)
 	enter_dialogue()
 	mode="questions"
 	speaker.text="THE TEACHER"
@@ -117,6 +118,7 @@ func answer(index: int) -> void:
 	set_text(questions[index][1])
 func begin_roam() -> void:
 	chatter.stop()
+	game.audio.play("lesson_stand",game.player.position,-14)
 	mode="roam"
 	active=false
 	panel.hide()

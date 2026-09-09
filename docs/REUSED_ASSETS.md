@@ -42,3 +42,7 @@ Source: original Ash & Oath crawler, commit `4a3c31f6c8634bf84f52702340a98b11de5
 ## New work
 
 `tools/village_details.py` and `art/village/village_details.blend` create the new village assets. `tools/player_activities.py` derives `assets/village/hub_player.glb` from the reused villager rig, adding petting, feeding, watering, and sitting clips. Their source and the actually used GLBs are included; unused dungeon/combat assets remain outside this repo.
+
+## Generated sounds
+
+Every file in `assets/audio` other than the nine reused recordings above is generated from `assets/audio/manifest.json` by `tools/generate_sounds.py` through the ElevenLabs sound-effects API and processed with ffmpeg. They are original to Game2; regenerate any of them by name with the script.

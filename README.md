@@ -15,7 +15,7 @@ Or import `project.godot` into Godot 4.7 and press F5. The launcher imports asse
 - WASD/arrows: walk; Shift: run.
 - F: interact with the nearest animal or activity.
 - Mouse wheel: zoom. Middle mouse drag: rotate the elevated camera.
-- Tab: village overview. H: hide interface. M: mute audio.
+- Tab: village overview. H: hide interface. M: mute audio. Options has a slider for music, ambience, effects, interface and voices.
 - R: return to the arrival path. F11: fullscreen. Escape: pause/menu.
 
 ## Things to try
@@ -45,6 +45,8 @@ Shop checks: `./play.fish -- --shop-test`. This uses isolated saves and test-onl
 - `docs/REUSED_ASSETS.md`: source provenance.
 - `docs/STORY.md`: story direction.
 - `docs/SYSTEMS.md`: progression requirements awaiting implementation.
+- `docs/AUDIO.md`: every sound the game needs, by trigger, and how `scripts/audio_kit.gd` plays them.
+- `tools/generate_sounds.py`: generate missing sound files from `assets/audio/manifest.json` with ElevenLabs (`ELEVENLABS_API_KEY`).
 - `docs/PERFORMANCE.md`: why the hub was renderer-bound and how batching fixed it without changing the picture.
 
 ```fish

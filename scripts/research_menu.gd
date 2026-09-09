@@ -165,6 +165,7 @@ func _ready() -> void:
 	)
 	game.research.finished.connect(notify)
 func notify(message: String) -> void:
+	game.audio.ui("research_complete",-8)
 	toast_label.text=message
 	toast_time=8
 	toast_panel.show()
@@ -175,6 +176,7 @@ func show_unread() -> void:
 	if count>0: notify("%d completed studies\nBonuses are active. Details are in the archive journal."%count)
 func open() -> void:
 	active=true
+	game.audio.ui("archive_open",-10)
 	game.input_blocked=true
 	game.ui.hide()
 	game.sync_camera_mouse()
@@ -182,6 +184,7 @@ func open() -> void:
 	refresh()
 func close() -> void:
 	active=false
+	game.audio.ui("archive_close",-12)
 	root.hide()
 	game.input_blocked=false
 	game.ui.show()
@@ -193,7 +196,8 @@ func _input(event: InputEvent) -> void:
 func time_text(seconds: float) -> String:
 	var total := int(ceil(seconds))
 	return "%dm %02ds"%[total/60,total%60] if total>=60 else "%ds"%total
-func act(result: String) -> void:
+func act(result: String,sound := "research_start") -> void:
+	game.audio.ui("ui_denied" if not result.is_empty() else sound,-10)
 	status.text=result if not result.is_empty() else "Research updated. Progress and payment are saved."
 	var tone: Color = BAD if not result.is_empty() else GOOD
 	status.add_theme_color_override("font_color",PARCH)
@@ -211,6 +215,7 @@ func study_node(def: Dictionary) -> Button:
 	node.size=Vector2(NODE_WIDTH,96)
 	node.focus_mode=Control.FOCUS_NONE
 	node.pressed.connect(func(): selected=def.id; refresh())
+	UiKit.sound(node)
 	var bg: Color = {"Completed":Color(.09,.13,.09,.97),"Researching":Color(.15,.13,.08,.97),"Paused":Color(.13,.10,.07,.97)}.get(state,Color(.05,.06,.065,.9) if locked else Color(.075,.085,.09,.96))
 	var chosen: bool = def.id==selected
 	node.add_theme_stylebox_override("normal",UiKit.flat(bg,GOLD if chosen else UiKit.tinted(accent,.2 if locked else .6),2 if chosen else 1,8,Vector2.ZERO))
@@ -317,7 +322,7 @@ func refresh() -> void:
 		remaining.autowrap_mode=TextServer.AUTOWRAP_OFF
 		remaining.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		remaining.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
-		var toggle := UiKit.button(foot,"Resume" if project.paused else "Pause",func(): act(research.set_paused(id,not project.paused)),false,"secondary")
+		var toggle := UiKit.button(foot,"Resume" if project.paused else "Pause",func(): act(research.set_paused(id,not project.paused),"research_pause"),false,"secondary")
 		toggle.custom_minimum_size.y=28
 		toggle.add_theme_font_size_override("font_size",13)
 		UiKit.skin(toggle,"secondary",6,Vector2(10,2))
@@ -504,7 +509,7 @@ func show_detail(def: Dictionary) -> void:
 		var remaining := UiKit.label(detail,"",13,MUTED)
 		progress_widgets["detail:"+def.id]=[progress,remaining]
 		UiKit.label(detail,"This rank is already paid for. Pausing keeps all progress and releases its desk.",13,MUTED)
-		UiKit.button(detail,"Resume study" if project.paused else "Pause study",func(): act(research.set_paused(def.id,not research.projects[def.id].paused)),false,"primary" if project.paused else "secondary")
+		UiKit.button(detail,"Resume study" if project.paused else "Pause study",func(): act(research.set_paused(def.id,not research.projects[def.id].paused),"research_pause"),false,"primary" if project.paused else "secondary")
 	elif rank>=def.ranks:
 		var done := HBoxContainer.new()
 		done.add_theme_constant_override("separation",8)

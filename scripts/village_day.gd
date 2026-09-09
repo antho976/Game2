@@ -14,6 +14,11 @@ var clock_label: Label
 var completed := {}
 var elapsed := 0.0
 var next_water := 0.0
+var daylight := 1.0
+var lit := false
+var owl_due := 20.0
+var cockerel_due := 0.0
+var gust_due := 25.0
 
 func build() -> void:
 	enabled = not game.test_mode or "--routine-test" in OS.get_cmdline_user_args()
@@ -74,7 +79,8 @@ func _process(delta: float) -> void:
 
 func update_light() -> void:
 	var h := hour()
-	var daylight := smoothstep(5.5,7.5,h)*(1.0-smoothstep(18.2,20.8,h))
+	daylight = smoothstep(5.5,7.5,h)*(1.0-smoothstep(18.2,20.8,h))
+	update_ambience(h)
 	var dusk := (1.0-smoothstep(0,2,absf(h-18.8)))*daylight
 	sun.light_energy = lerpf(.10,1.15,daylight)
 	sun.light_color = Color(.40,.52,.80).lerp(Color(1,.96,.87),daylight).lerp(Color(1,.61,.34),dusk*.5)
@@ -85,8 +91,52 @@ func update_light() -> void:
 	var minute := int(h*60)%60
 	clock_label.text = "%02d:%02d  ·  %s" % [int(h),minute,"Night" if daylight<.2 else ("Evening" if h>18 else "Day")]
 
+## Ambience beds follow the light: birds by day, crickets by night, a chorus at the edges.
+## Indoors the whole village drops away behind the schoolroom's own tone.
+func update_ambience(h: float) -> void:
+	var audio: AudioKit = game.audio
+	if audio == null: return
+	var indoors: float = .3 if game.inside_school() else 1.0
+	var dawn := (1.0-smoothstep(0,1.6,absf(h-6.5)))
+	var dusk := (1.0-smoothstep(0,1.6,absf(h-19.2)))
+	audio.bed("amb_hub_air",-23,maxf(daylight,.35)*indoors)
+	audio.bed("amb_day_birds",-24,daylight*(1.0-dawn*.5)*indoors)
+	audio.bed("amb_dawn",-22,dawn*indoors)
+	audio.bed("amb_dusk",-22,dusk*indoors)
+	audio.bed("amb_night",-22,(1.0-daylight)*indoors)
+	# Lamps catch as the light goes, once, and go out again with the morning.
+	var should_light := daylight < .5
+	if should_light != lit:
+		lit = should_light
+		if enabled and not game.test_mode:
+			for i in lamps.size():
+				var lamp: OmniLight3D = lamps[i]
+				get_tree().create_timer(i*.3).timeout.connect(func(): audio.play("time_lamp_light",lamp.global_position,-22 if lit else -28,{"max_distance":6}))
+
+func _process_ambience_events(delta: float) -> void:
+	if not enabled or game.test_mode: return
+	var h := hour()
+	owl_due -= delta
+	if daylight < .2 and owl_due <= 0:
+		owl_due = randf_range(40,90)
+		var angle := randf()*TAU
+		game.audio.play("time_owl",game.player.position+Vector3(cos(angle),6,sin(angle))*24,-8,{"max_distance":60,"unit_size":10})
+	if h > 5.6 and h < 6.6:
+		cockerel_due -= delta
+		if cockerel_due <= 0:
+			cockerel_due = randf_range(12,30)
+			var hamlet: Vector3 = game.kit.landscape.hamlet_centers[randi()%game.kit.landscape.hamlet_centers.size()]
+			game.audio.play("time_cockerel",hamlet+Vector3.UP*2,-6,{"max_distance":80,"unit_size":12})
+	else: cockerel_due = 0.0
+	gust_due -= delta
+	if gust_due <= 0:
+		gust_due = randf_range(20,50)*(0.7 if daylight < .2 else 1.0)
+		var tree: Node3D = game.kit.trees[randi()%game.kit.trees.size()] if not game.kit.trees.is_empty() else null
+		if tree: game.audio.play("amb_wind_gust",tree.global_position+Vector3.UP*5,-16,{"max_distance":30,"unit_size":8,"bus":"Ambience"})
+
 func _physics_process(delta: float) -> void:
 	if not enabled or not game.kit.life.navigation_ready: return
+	_process_ambience_events(delta)
 	for i in residents.size(): step(residents[i],i,delta)
 
 func release(r: Dictionary) -> void:
@@ -148,6 +198,8 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		person.collision_mask = 3
 		r.state = "waiting"
 		r.due = 2+index
+		game.audio.play("door_open",r.door+Vector3.UP,-16,{"cooldown":.3})
+		get_tree().create_timer(1.2).timeout.connect(func(): game.audio.play("door_close",r.door+Vector3.UP,-18,{"cooldown":.3}))
 	if at_night and r.job != "home": travel(r,"home",r.door)
 	if r.state == "waiting":
 		r.due -= delta
@@ -187,6 +239,13 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		var actual_speed: float = Vector2(person.position.x-before.x,person.position.z-before.z).length()/maxf(delta,.001)
 		person.animation.speed_scale = clampf(actual_speed/(1.5 if person.profession=="villager" else .8),.25,1.5)
 		if actual_speed<.08: person.play("idle")
+		# Residents' footsteps share the player's surfaces at a quieter level.
+		r.stride = float(r.get("stride",0.0))+actual_speed*delta
+		if r.stride >= .65:
+			r.stride = 0.0
+			var id: String = "step_"+game.kit.surface_at(person.position)+"_walk"
+			if not game.audio.has(id): id = "step_grass_walk"
+			game.audio.play(id,person.position,-24,{"max_distance":12,"pitch_spread":.07})
 		if r.stuck>2:
 			r.path = path_to(person,r.door if r.job=="home" else (r.work if r.job.begins_with("work_") else stations[r.job]))
 			r.stuck = 0.0
@@ -213,10 +272,19 @@ func step(r: Dictionary, index: int, delta: float) -> void:
 		person.animation.speed_scale = 1
 		if action == "hammer":
 			var at: float = person.animation.current_animation_position
-			if person.previous_time<.8 and at>=.8: person.work_struck.emit()
+			if person.previous_time<.8 and at>=.8:
+				person.work_struck.emit()
+				r.strikes = int(r.get("strikes",0))+1
+				if r.strikes%4 == 0: game.audio.play("smith_quench",person.position+Vector3(-.6,.8,.4),-16)
 			person.previous_time = at
+		elif action == "read" and randf() < delta*.2: game.audio.play("scholar_page",person.position+Vector3.UP,-20,{"cooldown":2.5})
 		if job.begins_with("talk"):
 			var other_pos: Vector3 = stations["talk_b" if job=="talk_a" else "talk_a"]
+			# Two neighbours trading wordless murmurs, one at a time.
+			r.chatter = float(r.get("chatter",randf_range(0,3)))-delta
+			if r.chatter <= 0:
+				r.chatter = randf_range(2.2,5.5)
+				game.audio.play("npc_chatter_high" if index%2 else "npc_chatter_low",person.position+Vector3.UP*1.5,-16,{"bus":"Dialogue","max_distance":10,"cooldown":.8})
 			var facing := other_pos-person.position
 			person.model.rotation.y = lerp_angle(person.model.rotation.y,atan2(facing.x,facing.z),delta*3)
 			person.model.rotation.z = sin(r.timer*1.4+index)*.015
@@ -235,6 +303,8 @@ func arrive(r: Dictionary,index: int) -> void:
 		r.npc.collision_mask = 0
 		release(r)
 		r.state = "inside"
+		game.audio.play("door_open",r.door+Vector3.UP,-16,{"cooldown":.3})
+		get_tree().create_timer(.9).timeout.connect(func(): game.audio.play("door_close",r.door+Vector3.UP,-18,{"cooldown":.3}))
 		return
 	r.state = "working"
 	r.arrivals += 1
