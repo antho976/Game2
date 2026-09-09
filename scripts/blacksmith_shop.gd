@@ -39,10 +39,7 @@ const BAD := ForgeUi.BLOOD
 const GearIcon := UiKit.GearIcon
 const SLOT_NAMES := {"all":"All","weapon":"Swords","helmet":"Helms","chest":"Cuirasses","gloves":"Gauntlets","boots":"Greaves"}
 const SLOT_SINGULAR := {"weapon":"Sword","helmet":"Helm","chest":"Cuirass","gloves":"Gauntlets","boots":"Greaves"}
-const STAT_NAMES := {"damage":"Damage","speed":"Attack speed","stamina":"Stamina cost","protection":"Protection","weight":"Weight"}
-const STAT_MAX := {"damage":70.0,"speed":1.3,"stamina":40.0,"protection":26.0,"weight":12.0}
-const STAT_COLORS := {"damage":Color(.95,.55,.28),"speed":Color(.58,.80,.96),"stamina":Color(.86,.72,.40),"protection":Color(.60,.78,.96),"weight":Color(.70,.66,.60)}
-const LOWER_BETTER := ["stamina","weight"]
+const STAT_NAMES := ForgeUi.STAT_NAMES
 static func tier_of(id: String) -> Array:
 	return ForgeUi.RARITY.get(id.get_slice("_",0),ForgeUi.RARITY.warden)
 func _ready() -> void:
@@ -52,8 +49,7 @@ func _ready() -> void:
 	add_child(root)
 	root.theme = ForgeUi.theme()
 	ForgeUi.page(root)
-	thumbnails = GearThumbnails.new()
-	add_child(thumbnails)
+	thumbnails = GearThumbnails.instance(game)
 	thumbnails.finished.connect(func():
 		if active: refresh())
 	# The page on the left, the lit alcove on the right, sharing no border.
@@ -163,30 +159,12 @@ func build_columns(body: Node) -> void:
 	rack_margin.add_child(rows)
 	rows_scroll.resized.connect(fit_columns)
 	# The appraisal is the only heavy plate; the eye should land here.
-	var appraisal := ForgeUi.panel(columns,ForgeUi.appraisal_box(Vector2(24,22)))
+	var parts := ForgeUi.appraisal(columns)
+	var appraisal: PanelContainer = parts[0]
 	appraisal.custom_minimum_size.x = 330
-	appraisal.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var corners := ForgeUi.Corners.new()
-	corners.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	corners.color = Color(GILT.r,GILT.g,GILT.b,.55)
-	corners.inset = 7
-	appraisal.add_child(corners)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation",10)
-	appraisal.add_child(stack)
-	detail_fade = stack
-	var detail_scroll := ScrollContainer.new()
-	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ForgeUi.style_scroll(detail_scroll)
-	stack.add_child(detail_scroll)
-	detail = VBoxContainer.new()
-	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail.add_theme_constant_override("separation",7)
-	detail_scroll.add_child(detail)
-	actions = VBoxContainer.new()
-	actions.add_theme_constant_override("separation",8)
-	stack.add_child(actions)
+	detail = parts[1]
+	actions = parts[2]
+	detail_fade = parts[3]
 
 func build_smith_line(body: Node) -> void:
 	var line := HBoxContainer.new()
@@ -342,8 +320,7 @@ func owned_count(id: String) -> int:
 		if entry.id==id: count+=1
 	return count
 func fmt(key: String,value: float) -> String:
-	if key=="speed": return "%.2f"%value
-	return ("%d"%int(round(value))) if is_equal_approx(value,round(value)) else "%.1f"%value
+	return ForgeUi.stat_text(key,value)
 
 # ---------------------------------------------------------------- pieces
 
@@ -481,35 +458,7 @@ func badge(card: Control,label: String,color: Color,right: bool) -> void:
 	ForgeUi.tag(row,label,color,true)
 
 func stat_row(key: String,value: float,baseline: Variant) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation",12)
-	detail.add_child(row)
-	var name := ForgeUi.caps(row,STAT_NAMES[key],11,FADED,2.0)
-	name.custom_minimum_size.x = 108
-	name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var bar := ForgeUi.Bar.new()
-	bar.value = value
-	bar.maximum = STAT_MAX[key]
-	bar.baseline = float(baseline) if baseline!=null else -1.0
-	bar.color = STAT_COLORS[key]
-	bar.custom_minimum_size = Vector2(70,11)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(bar)
-	var amount := ForgeUi.number(row,fmt(key,value),17,VELLUM)
-	amount.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	amount.custom_minimum_size.x = 46
-	amount.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var delta_label := ForgeUi.number(row,"",12,FADED)
-	delta_label.custom_minimum_size.x = 52
-	delta_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if baseline!=null:
-		var delta: float = value-float(baseline)
-		if absf(delta)>.001:
-			var better: bool = (delta<0) if key in LOWER_BETTER else (delta>0)
-			delta_label.text = ("▲ " if delta>0 else "▼ ")+fmt(key,absf(delta))
-			delta_label.add_theme_color_override("font_color",GOOD if better else BAD)
-		else: delta_label.text = "same"
+	ForgeUi.measure(detail,key,value,float(baseline) if baseline!=null else -1.0)
 
 func item_header(def: Dictionary,rank: int) -> void:
 	var tier: Array = tier_of(def.id)

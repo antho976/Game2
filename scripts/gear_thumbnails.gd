@@ -20,6 +20,15 @@ var forge: Node3D
 var cache := {}
 var ready_for_use := false
 
+## One forge serves every screen that shows gear; the icons are the same
+## steel wherever they appear, and they are only rendered once.
+static var shared: GearThumbnails
+static func instance(host: Node) -> GearThumbnails:
+	if not is_instance_valid(shared):
+		shared = GearThumbnails.new()
+		host.add_child(shared)
+	return shared
+
 func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.size = Vector2i(SIZE,SIZE)

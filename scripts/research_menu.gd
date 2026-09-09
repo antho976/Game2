@@ -128,30 +128,13 @@ func _ready() -> void:
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(center)
 	center.add_child(graph)
-	var appraisal := ForgeUi.panel(columns,ForgeUi.appraisal_box(Vector2(22,20)))
+	var parts := ForgeUi.appraisal(columns)
+	var appraisal: PanelContainer = parts[0]
 	appraisal.custom_minimum_size.x = clampf(get_viewport().get_visible_rect().size.x*.29,290,420)
 	get_viewport().size_changed.connect(func(): appraisal.custom_minimum_size.x=clampf(get_viewport().get_visible_rect().size.x*.29,290,420))
-	var corners := ForgeUi.Corners.new()
-	corners.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	corners.color = Color(GILT.r,GILT.g,GILT.b,.55)
-	corners.inset = 7
-	appraisal.add_child(corners)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation",10)
-	appraisal.add_child(stack)
-	detail_fade = stack
-	var details_scroll := ScrollContainer.new()
-	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ForgeUi.style_scroll(details_scroll)
-	stack.add_child(details_scroll)
-	detail = VBoxContainer.new()
-	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail.add_theme_constant_override("separation",7)
-	details_scroll.add_child(detail)
-	actions = VBoxContainer.new()
-	actions.add_theme_constant_override("separation",8)
-	stack.add_child(actions)
+	detail = parts[1]
+	actions = parts[2]
+	detail_fade = parts[3]
 	var desk_row := HBoxContainer.new()
 	desk_row.add_theme_constant_override("separation",12)
 	body.add_child(desk_row)

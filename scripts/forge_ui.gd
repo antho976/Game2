@@ -17,6 +17,16 @@ const VERDIGRIS := Color(.52,.76,.55)       # gain
 const STEEL := Color(.72,.78,.84)
 const SAPPHIRE := Color(.56,.82,.96)     # cut gems, and anything cold
 
+# How a piece of gear's numbers present: the name to print, the span a bar
+# fills, the colour it fills with, and which way is better.
+const STAT_NAMES := {"damage":"Damage","speed":"Attack speed","stamina":"Stamina cost","protection":"Protection","weight":"Weight"}
+const STAT_MAX := {"damage":70.0,"speed":1.3,"stamina":40.0,"protection":26.0,"weight":12.0}
+const STAT_COLORS := {"damage":Color(.95,.55,.28),"speed":Color(.58,.80,.96),"stamina":Color(.86,.72,.40),"protection":Color(.60,.78,.96),"weight":Color(.70,.66,.60)}
+const LOWER_BETTER := ["stamina","weight"]
+static func stat_text(key: String,value: float) -> String:
+	if key=="speed": return "%.2f"%value
+	return ("%d"%int(round(value))) if is_equal_approx(value,round(value)) else "%.1f"%value
+
 const RARITY := {
 	"warden":["Common",Color(.80,.79,.74)],
 	"pilgrim":["Fine",Color(.60,.83,.55)],
@@ -137,6 +147,41 @@ static func appraisal_box(pad: Vector2) -> Plate:
 	box.sheen = Color(1,.86,.62,.055)
 	box.drop = 3.0
 	return box
+## The heavy plate every screen reads from: corner marks kept inside the
+## padding so nothing collides with them, a scroll whose bar never sits over
+## the text, and a rail at the foot the action stands on.
+## Returns [plate, reading column, action rail].
+static func appraisal(parent: Node) -> Array:
+	var plate := panel(parent,appraisal_box(Vector2(28,24)))
+	plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var marks := Corners.new()
+	marks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	marks.color = Color(GILT.r,GILT.g,GILT.b,.55)
+	marks.arm = 14
+	marks.inset = 8
+	plate.add_child(marks)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation",10)
+	plate.add_child(stack)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	style_scroll(scroll)
+	stack.add_child(scroll)
+	# The bar floats over the viewport, so the reading column keeps clear of it.
+	var gutter := MarginContainer.new()
+	gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gutter.add_theme_constant_override("margin_right",14)
+	scroll.add_child(gutter)
+	var reading := VBoxContainer.new()
+	reading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reading.add_theme_constant_override("separation",7)
+	gutter.add_child(reading)
+	var rail := VBoxContainer.new()
+	rail.add_theme_constant_override("separation",8)
+	stack.add_child(rail)
+	return [plate,reading,rail,stack]
+
 static func panel(parent: Node,box: StyleBox) -> PanelContainer:
 	var node := PanelContainer.new()
 	node.add_theme_stylebox_override("panel",box)
@@ -422,6 +467,40 @@ static func style_scroll(scroll: ScrollContainer) -> void:
 			Color(GILT.r,GILT.g,GILT.b,.35 if lit else .18),
 			Color(GILT.r,GILT.g,GILT.b,.5 if lit else .22),Vector2(3,0),3.0))
 	bar.custom_minimum_size.x = 9
+
+## One measured line: rubric, bar, reading, and what it is worth against the
+## piece already worn. Pass a baseline below zero for no comparison.
+static func measure(parent: Node,key: String,value: float,baseline: float,label_width := 108.0) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",12)
+	parent.add_child(row)
+	var name := caps(row,STAT_NAMES.get(key,key.capitalize()),11,FADED,2.0)
+	name.custom_minimum_size.x = label_width
+	name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var bar := Bar.new()
+	bar.value = value
+	bar.maximum = STAT_MAX.get(key,1.0)
+	bar.baseline = baseline
+	bar.color = STAT_COLORS.get(key,GILT)
+	bar.custom_minimum_size = Vector2(64,11)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(bar)
+	var amount := number(row,stat_text(key,value),17,VELLUM)
+	amount.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	amount.custom_minimum_size.x = 46
+	amount.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var delta_label := number(row,"",12,FADED)
+	delta_label.custom_minimum_size.x = 52
+	delta_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if baseline<0.0: return
+	var delta: float = value-baseline
+	if absf(delta)<=.001:
+		delta_label.text = "same"
+		return
+	var better: bool = (delta<0) if key in LOWER_BETTER else (delta>0)
+	delta_label.text = ("▲ " if delta>0 else "▼ ")+stat_text(key,absf(delta))
+	delta_label.add_theme_color_override("font_color",VERDIGRIS if better else BLOOD)
 
 static func rule(parent: Node,pip := true,color := Color(GILT.r,GILT.g,GILT.b,.42)) -> Rule:
 	var node := Rule.new()

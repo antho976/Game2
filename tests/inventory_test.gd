@@ -34,8 +34,9 @@ func run(game: Node) -> void:
 	game.smith_shop.open()
 	await shot("starter-offer")
 	var offer: Button
-	for button in game.smith_shop.detail.find_children("*","Button",true,false):
-		if button.text.begins_with("Accept starter"):offer=button
+	# The offer sits on the shop's action rail and is set in display caps.
+	for button in game.smith_shop.root.find_children("*","Button",true,false):
+		if button.text.to_lower().begins_with("accept starter"):offer=button
 	check(offer!=null,"Blacksmith presents a free starter offer to a fresh character")
 	var path: String=game.menus.save_path
 	game.menus.save_path="user://missing-inventory-folder/save.cfg"
@@ -88,6 +89,9 @@ func run(game: Node) -> void:
 	check(gear.equipped.weapon==duplicate,"Failed inventory save preserves equipped gear")
 	game.menus.save_path=path
 	if DisplayServer.get_name()!="headless":
+		# Item icons are rendered from the real gear; wait for the forge.
+		if not inventory.thumbnails.ready_for_use: await inventory.thumbnails.finished
+		inventory.refresh()
 		for size in [Vector2i(1080,720),Vector2i(1440,900),Vector2i(1920,1080)]:
 			DisplayServer.window_set_size(size)
 			await wait(.6)
