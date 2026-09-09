@@ -6,7 +6,7 @@ Priority: **P1** is heard every minute of play and is missing or a placeholder; 
 
 ## 0. Where things stand
 
-Every priority-1 sound in `assets/audio/manifest.json` has been generated with ElevenLabs and lives in `assets/audio` (about 190 files, 28 MB). The tables below keep the original audit for reference: an entry marked **missing** there is present today if its id is priority 1 in the manifest, and is still silent if it is priority 2 or 3. Generate the rest with `python3 tools/generate_sounds.py --priority 2` or `--all`.
+Every sound in `assets/audio/manifest.json`, all three priorities, has been generated with ElevenLabs and lives in `assets/audio` (about 300 files, 38 MB). The tables below keep the original audit for reference: an entry marked **missing** there is present today if the manifest has its id. Regenerate any take by name with `python3 tools/generate_sounds.py --force <id>`; new entries in the manifest are picked up by a plain run.
 
 ## 1. Current state at the time of the audit
 
