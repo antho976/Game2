@@ -1,0 +1,12 @@
+{
+  "model_id": "eleven_v3",
+  "text": "We called them gods.\n\nBeneath their gaze, we raised our kingdoms, and buried our fathers.\nWe knew not who had sown the hunger in our hearts.\nOnly that whatever we took, we hungered still.\n\nAnd as we warred, they fed.\n\nYet there came an age when even our ruin could no longer sustain them.\nThey turned their eyes upon the living.\nAll that remained was to be gathered.\n\nBut one among them refused.\n\nHe had dwelt beneath our roofs.\nThere was one who waited for his return.\nThrough her, he came to know why we clung so fiercely to our days.\n\nFor her sake, he stood against his kind.\nFor ours, he gave his life.\n\nHis sacrifice stayed their hand.\nThey would not forgive him for it.\n\nIn their wrath, the gods opened the gates,\nand laid their decree upon those he had spared.\n\n\u201cThy world shall endure, so long as another bears its hunger.\nWhat we are owed, thou shalt take from beyond these gates.\nSpare the root, that thou mayest reap again.\nShouldst thou return empty-handed...\nwe shall gather what remains of thee.\u201d\n\nThus were we spared.\n\nWe, who had prayed for mercy,\nwent forth to take what others could not bear to lose.\n\nAnd behind us, our children lived.",
+  "seed": 1977,
+  "voice_settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.85,
+    "style": 0,
+    "use_speaker_boost": false,
+    "speed": 0.9
+  }
+}

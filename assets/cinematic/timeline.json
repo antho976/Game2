@@ -1,0 +1,177 @@
+{
+  "duration": 80.24000000000001,
+  "chapters": [
+    {
+      "start": 0,
+      "kind": 0,
+      "image": "01-village.png",
+      "title": "B E F O R E   T H E   F I R S T   G A T E",
+      "end": 13.6
+    },
+    {
+      "start": 13.6,
+      "kind": 1,
+      "image": "02-the-feast.png",
+      "title": "T H E   F E A S T",
+      "end": 24.54
+    },
+    {
+      "start": 24.54,
+      "kind": 2,
+      "image": "03-sacrifice.png",
+      "title": "O N E   R E F U S E D",
+      "end": 51.800000000000004
+    },
+    {
+      "start": 51.800000000000004,
+      "kind": 3,
+      "image": "04-gates.png",
+      "title": "T H E   O R D E A L",
+      "end": 65.70400000000001
+    },
+    {
+      "start": 65.70400000000001,
+      "kind": 4,
+      "image": "05-children.png",
+      "title": "",
+      "end": 80.24000000000001
+    }
+  ],
+  "cues": [
+    {
+      "text": "We called them gods.",
+      "start": 1.2,
+      "end": 2.88
+    },
+    {
+      "text": "Beneath their gaze, we raised our kingdoms, and buried our fathers.",
+      "start": 2.88,
+      "end": 7.627
+    },
+    {
+      "text": "We knew not who had sown the hunger in our hearts.",
+      "start": 7.627,
+      "end": 11.056
+    },
+    {
+      "text": "Only that whatever we took, we hungered still.",
+      "start": 11.056,
+      "end": 14.18
+    },
+    {
+      "text": "And as we warred, they fed.",
+      "start": 14.2,
+      "end": 16.580000000000002
+    },
+    {
+      "text": "Yet there came an age when even our ruin could no longer sustain them.",
+      "start": 16.580000000000002,
+      "end": 20.72
+    },
+    {
+      "text": "They turned their eyes upon the living.",
+      "start": 20.72,
+      "end": 22.99
+    },
+    {
+      "text": "All that remained was to be gathered.",
+      "start": 22.99,
+      "end": 25.14
+    },
+    {
+      "text": "But one among them refused.",
+      "start": 25.14,
+      "end": 27.14
+    },
+    {
+      "text": "He had dwelt beneath our roofs.",
+      "start": 27.147,
+      "end": 29.32
+    },
+    {
+      "text": "There was one who waited for his return.",
+      "start": 29.32,
+      "end": 31.75
+    },
+    {
+      "text": "Through her, he came to know why we clung so fiercely to our days.",
+      "start": 31.75,
+      "end": 36.1
+    },
+    {
+      "text": "For her sake, he stood against his kind.",
+      "start": 36.1,
+      "end": 38.82
+    },
+    {
+      "text": "For ours, he gave his life.",
+      "start": 38.82,
+      "end": 41.38
+    },
+    {
+      "text": "His sacrifice stayed their hand.",
+      "start": 41.38,
+      "end": 43.808
+    },
+    {
+      "text": "They would not forgive him for it.",
+      "start": 43.808,
+      "end": 45.7
+    },
+    {
+      "text": "In their wrath, the gods opened the gates,",
+      "start": 45.733000000000004,
+      "end": 48.84
+    },
+    {
+      "text": "and laid their decree upon those he had spared.",
+      "start": 48.84,
+      "end": 51.74
+    },
+    {
+      "text": "\u201cThy world shall endure, so long as another bears its hunger.",
+      "start": 51.800000000000004,
+      "end": 55.376000000000005
+    },
+    {
+      "text": "What we are owed, thou shalt take from beyond these gates.",
+      "start": 55.376000000000005,
+      "end": 59.0
+    },
+    {
+      "text": "Spare the root, that thou mayest reap again.",
+      "start": 59.0,
+      "end": 61.92
+    },
+    {
+      "text": "Shouldst thou return empty-handed...",
+      "start": 61.92,
+      "end": 64.347
+    },
+    {
+      "text": "we shall gather what remains of thee.\u201d",
+      "start": 64.347,
+      "end": 66.26
+    },
+    {
+      "text": "Thus were we spared.",
+      "start": 66.304,
+      "end": 68.18
+    },
+    {
+      "text": "We, who had prayed for mercy,",
+      "start": 68.427,
+      "end": 70.608
+    },
+    {
+      "text": "went forth to take what others could not bear to lose.",
+      "start": 70.608,
+      "end": 73.78
+    },
+    {
+      "text": "And behind us, our children lived.",
+      "start": 73.78,
+      "end": 76.42000000000002
+    }
+  ]
+}

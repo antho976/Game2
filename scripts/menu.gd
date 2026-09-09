@@ -17,6 +17,7 @@ var confirm: ConfirmationDialog
 var panel: PanelContainer
 var fps_label: Label
 var fps_clock := 0.0
+var intro: Control
 
 func _ready() -> void:
 	layer = 10
@@ -177,6 +178,7 @@ func reset_player(pos: Vector3) -> void:
 	game.camera_target = pos
 
 func new_game() -> void:
+	if is_instance_valid(intro): return
 	if is_instance_valid(game.research_menu):
 		game.research_menu.toast_time=0
 		game.research_menu.toast_panel.hide()
@@ -189,6 +191,26 @@ func new_game() -> void:
 		if animal.kind == "cat": animal.pets = 0
 	resume()
 	save_game()
+	play_intro()
+
+func play_intro() -> void:
+	game.input_blocked = true
+	game.ui.hide()
+	game.sync_camera_mouse()
+	var overlay := CanvasLayer.new()
+	overlay.layer = 100
+	overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	game.add_child(overlay)
+	intro = load("res://assets/cinematic/cinematic.gd").new()
+	intro.finished.connect(func():
+		get_tree().paused = false
+		intro = null
+		overlay.queue_free()
+		resume()
+	)
+	overlay.add_child(intro)
+	intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	get_tree().paused = true
 
 func continue_game() -> void:
 	var data := ConfigFile.new()
