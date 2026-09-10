@@ -201,9 +201,10 @@ func make_sword(parent: Node3D,style: int) -> Node3D:
 	builder.leather=GearVisuals.material(Color(.10,.07,.045))
 	builder.sword(root,style)
 	return root
-func add_grip(model: Node3D,sword: Node3D) -> SkeletonModifier3D:
+func add_grip(model: Node3D,sword: Node3D,lead := "R") -> SkeletonModifier3D:
 	var grip=preload("res://scripts/combat_grip.gd").new()
 	grip.sword=sword
+	grip.lead=lead
 	model.find_children("*","Skeleton3D",true,false)[0].add_child(grip)
 	return grip
 func add_stance(model: Node3D) -> Node:
@@ -343,7 +344,7 @@ func refresh_weapon() -> void:
 	if not game.sword_drawn:return
 	hero_sword=make_sword(game.player.model,int(weapon().style))
 	hero_stance=add_stance(game.player.model)
-	hero_grip=add_grip(game.player.model,hero_sword)
+	hero_grip=add_grip(game.player.model,hero_sword,"L") # The choreography is mirrored onto this rig, so the other hand leads.
 	hero_trail=add_trail(hero_sword)
 	if hands:
 		var held=hands.get_node_or_null("HeldGreatsword")
@@ -442,11 +443,19 @@ func feint(fighter: Dictionary,direction: int,is_hero: bool) -> bool:
 	fighter.attack_dir=direction
 	fighter.guard=direction
 	fighter.timer=fighter.total*.55
+	swing_from(fighter,.45) # The blade re-chambers from where the lie left it.
 	fighter.flash=.35
 	if is_hero: show_banner("FEINT",Color(.95,.85,.55))
 	else: show_banner("FEINT!",Color(1,.5,.35))
 	audio.play("feint",(game.player.position if is_hero else enemy.position)+Vector3.UP*1.3,-14)
 	return true
+# A swing is drawn from wherever the blade was last shown, so a buffered cut, a feint or a cut
+# thrown out of a guard never snaps to a fixed start. `at` is the windup progress it begins from.
+func swing_from(fighter: Dictionary,at: float) -> void:
+	fighter.bounce=false
+	fighter.from_at=at
+	if fighter.has("last_xf"): fighter.from_xf=fighter.last_xf
+	else: fighter.erase("from_xf")
 func block(pressed: bool) -> void:
 	if pressed and not game.sword_drawn:return
 	if not active or cinematic.active(): return
@@ -496,6 +505,7 @@ func attack(heavy: bool) -> bool:
 	hero.heavy=heavy
 	hero.attack_dir=hero.guard
 	hero.from_guard=hero.blocking
+	swing_from(hero,0.0)
 	hero.blocking=false
 	hero.riposte=hero.counter>0
 	hero.critical=hero.counter>0 and hero.guard==hero.counter_dir and has_skill("riposte")
@@ -700,6 +710,7 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 			audio.play("raise",(game.player.position if is_hero else enemy.position)+Vector3.UP*1.2,-16)
 		fighter.phase="idle"
 		fighter.whiff=false
+		if not is_hero: fighter.raise=.12 # His guard comes back up with a snap, like the player's.
 		var trail=hero_trail if is_hero else enemy_trail
 		if is_instance_valid(trail): trail.active=false
 		if is_hero:
@@ -711,6 +722,7 @@ func tick(fighter: Dictionary,delta: float,is_hero: bool) -> void:
 			elif guard_held and not hero.blocking:
 				hero.blocking=true
 				hero.block_age=99.0
+				hero.raise=.14
 		elif fighter.followup and game.player.position.distance_to(enemy.position)<REACH and fighter.stamina>=12:
 			# A double: the second cut comes from another lane before the guard resets.
 			fighter.followup=false
@@ -759,11 +771,13 @@ func resolve_hit(from_hero: bool) -> String:
 		attacker.chain.clear()
 		last_result="dodge"
 		return "dodge"
+	attacker.bounce=false
 	if RULES.clashes(defender.phase,RULES.progress(defender),attacker.attack_dir,defender.attack_dir):
 		for fighter in [attacker,defender]:
 			fighter.phase="recovery"
 			fighter.timer=.55
 			fighter.total=.55
+			fighter.bounce=true
 			fighter.stamina=maxf(0,fighter.stamina-8)
 			fighter.chain.clear()
 			fighter.combo=""
@@ -792,6 +806,7 @@ func resolve_hit(from_hero: bool) -> String:
 		# His guard is frozen where the parry left it: that lane still blocks, the rest are open.
 		if RULES.open_defence(attacker.attack_dir,defender.guard)=="block":
 			defender.exhaust+=14.0
+			attacker.bounce=true
 			extend_chain(attacker,attacker.attack_dir)
 			impact(true)
 			sparks(contact,Color(1,.85,.55),10)
@@ -864,6 +879,8 @@ func resolve_hit(from_hero: bool) -> String:
 	if result=="block":
 		defender.stamina-=cost
 		defender.regen_delay=1.0
+		defender.flash=CombatChoreo.FLASH # The guard is driven back and springs into place.
+		attacker.bounce=true
 		defender.exhaust+=(26.0*(1.5 if from_hero and has_skill("breaker") else 1.0)) if attacker.heavy else 12.0
 		if not form.is_empty(): defender.exhaust+=float(form.exhaust)
 		extend_chain(attacker,attacker.attack_dir)
@@ -914,6 +931,7 @@ func resolve_hit(from_hero: bool) -> String:
 	defender.combo=""
 	var stagger: bool=attacker.heavy or finishing or attacker.critical
 	defender.staggered=stagger
+	defender.hit_from=attacker.attack_dir
 	if defender.phase!="exhausted" and interrupted:
 		defender.phase="hurt"
 		defender.timer=.46 if stagger else .26
@@ -1036,6 +1054,11 @@ func finish(hero_won: bool) -> void:
 		slow_motion(.45,.8)
 		game.audio.play_2d("defeat_stinger",-8,{"bus":"Music"})
 		stop("Defeated. Rest, then press F to try again. No items lost.")
+# His guard moves to a new lane with the same snap the player's has, so the cover can be read.
+func raise_guard(fighter: Dictionary,lane: int) -> void:
+	fighter.guard=lane
+	fighter.raise=.14
+	audio.play("raise",enemy.position+Vector3.UP*1.2,-22)
 func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe_swings+=1
 	foe.phase="windup"
@@ -1045,6 +1068,7 @@ func begin_enemy_attack(lane: int,heavy: bool,windup: float) -> void:
 	foe.total=windup
 	foe.timer=windup
 	foe.blocking=false
+	swing_from(foe,0.0)
 	foe.parry_ready=false
 	foe.feinted=false
 	foe.whiff=false
@@ -1208,7 +1232,7 @@ func partner_ai(delta: float,toward: Vector3,distance: float) -> void:
 				foe.read_timer=-2.0
 				var chance: float=float(profile.read_chance)*(.45 if hero.feinted else 1.0)
 				if foe.phase=="idle" and rng.randf()<chance:
-					foe.guard=hero.attack_dir
+					if foe.guard!=hero.attack_dir: raise_guard(foe,hero.attack_dir)
 					foe.block_age=99.0 # Ordinary answers; the rare sharp guard is flagged below.
 					foe.parry_ready=rng.randf()<float(profile.parry_chance)
 		elif hero.feinted and not foe.get("reread",false):
@@ -1222,8 +1246,8 @@ func partner_ai(delta: float,toward: Vector3,distance: float) -> void:
 	if hero.phase=="recovery" and hero.whiff and distance<REACH and foe.stamina>=20 and not foe.resting: decision=minf(decision,.05)
 	if decision>0: return
 	# Guard choice: sometimes the lane the player is showing, otherwise a fresh one.
-	if rng.randf()<.4: foe.guard=hero.guard
-	else: foe.guard=rng.randi_range(0,3)
+	var chosen: int=hero.guard if rng.randf()<.4 else rng.randi_range(0,3)
+	if chosen!=foe.guard: raise_guard(foe,chosen)
 	foe.block_age=99.0
 	foe.parry_ready=false
 	if distance<REACH and foe.stamina>=15 and not foe.resting:
@@ -1247,13 +1271,18 @@ func pose_sword(sword: Node3D,fighter: Dictionary,delta: float,first_person := f
 	if fighter.phase=="cinematic": return
 	var breath: float=sin(clock*2.1)
 	var pose: Dictionary=CombatChoreo.blade(fighter,RULES.progress(fighter),breath,clock)
+	if not first_person: fighter.last_xf=pose.xf # Where the blade was shown last: the next swing starts here.
 	var mirror_x: bool=not first_person and is_instance_valid(game.player) and sword.get_parent()==game.player.model
 	apply_blade(sword,pose.xf,pose.rate,delta,mirror_x,first_person)
 func apply_blade(sword: Node3D,xf: Transform3D,rate: float,delta: float,mirror_x: bool,first_person: bool) -> void:
 	var m := Basis.from_scale(Vector3(-1 if mirror_x else 1,1,-1 if first_person else 1))
 	var basis: Basis=m*xf.basis*m
 	var origin: Vector3=m*xf.origin
-	if first_person: origin=origin*.7+Vector3(0,-1.1,-.1)
+	if first_person:
+		# Hung in front of the camera: scaled toward the eye, and a chamber drawn back behind the
+		# head stays a forearm ahead of the lens so the hilt never passes through the view.
+		origin=origin*.72+Vector3(0,-1.16,-.20)
+		origin.z=minf(origin.z,-.30)
 	var target := Transform3D(basis.orthonormalized()*sword.scale.x,origin)
 	var weight: float=1.0 if delta<=0 else minf(delta*rate,1)
 	sword.transform=sword.transform.interpolate_with(target,weight)
